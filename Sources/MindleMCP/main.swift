@@ -6,9 +6,10 @@ import Darwin
 // over the running Mindle's Unix socket, and emits the JSON-RPC response
 // on stdout.
 //
-// Read-only by design: Mindle exposes only what no other tool can —
-// open-files state and the annotation feedback channel. Filesystem reads
-// belong in the agent's normal Read tool, not here.
+// Mindle exposes only the annotation feedback channel — what's open,
+// what the user has annotated, and a way for the agent to mark an
+// annotation as addressed. File IO (reads, writes) belongs in the
+// agent's normal filesystem tools, not here.
 
 @main
 struct MindleMCP {
@@ -98,16 +99,108 @@ struct MindleMCP {
         ]
     }
 
-    // MARK: - Tool surface (Phase 1: list_open_files only)
+    // MARK: - Tool surface
 
     private static func toolDefinitions() -> [[String: Any]] {
         return [
             [
                 "name": "list_open_files",
-                "description": "List the absolute paths of every Markdown file currently open in Mindle (across all windows and tabs). Use this to see what the user is reading right now.",
+                "description": "List the absolute paths of every file currently open in Mindle (across all windows and tabs). Use this to see what the user is reading right now.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [String: Any](),
+                    "additionalProperties": false
+                ]
+            ],
+            [
+                "name": "get_annotations",
+                "description": "Return every annotation (highlight or note) the user has placed on a file currently open in Mindle. Each annotation includes its id, the highlighted text verbatim, surrounding context, the user's note (often empty for plain highlights), and a creation timestamp. Use the annotation as the user's instruction to you: read it, address it with your normal file-editing tools, then call clear_annotation to mark it done.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "path": [
+                            "type": "string",
+                            "description": "Absolute path to the file. Must be a file currently open in Mindle — call list_open_files first if unsure."
+                        ]
+                    ],
+                    "required": ["path"],
+                    "additionalProperties": false
+                ]
+            ],
+            [
+                "name": "clear_annotation",
+                "description": "Mark an annotation as addressed and remove it from the file's sidebar. Provide a short summary of what you did so the user can see in their review pass. Call this after you've actually edited the file to address what the annotation asked for — clearing without addressing leaves the user confused.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "path": [
+                            "type": "string",
+                            "description": "Absolute path to the file the annotation lives on."
+                        ],
+                        "id": [
+                            "type": "string",
+                            "description": "The annotation's UUID, as returned by get_annotations."
+                        ],
+                        "summary": [
+                            "type": "string",
+                            "description": "One short sentence describing what you changed. Example: 'Rephrased the intro paragraph to be more concise.'"
+                        ]
+                    ],
+                    "required": ["path", "id", "summary"],
+                    "additionalProperties": false
+                ]
+            ],
+            [
+                "name": "comment_on_annotation",
+                "description": "Add a message to an annotation's thread without dismissing the annotation. Use this to reply to the user's note, ask a clarifying question before editing, or report progress on a multi-step change. The user sees your message inline under their annotation, with the same back-and-forth feel as a code review comment thread.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "path": [
+                            "type": "string",
+                            "description": "Absolute path to the file the annotation lives on."
+                        ],
+                        "id": [
+                            "type": "string",
+                            "description": "The annotation's UUID, as returned by get_annotations."
+                        ],
+                        "text": [
+                            "type": "string",
+                            "description": "Your message. Plain text. Keep it focused — one or two sentences usually."
+                        ]
+                    ],
+                    "required": ["path", "id", "text"],
+                    "additionalProperties": false
+                ]
+            ],
+            [
+                "name": "create_annotation",
+                "description": "Open a new annotation on a span of text in a file currently open in Mindle. Use this to ask the user a question about something you've written or about a passage you want their input on. The annotation appears in the user's sidebar marked as agent-authored with your note as the prompt; the user can reply in its thread.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "path": [
+                            "type": "string",
+                            "description": "Absolute path to the file. Must be currently open in Mindle."
+                        ],
+                        "text": [
+                            "type": "string",
+                            "description": "The exact substring of the file the annotation anchors to. Must appear verbatim in the current file content."
+                        ],
+                        "prefix": [
+                            "type": "string",
+                            "description": "Up to ~32 characters from the file immediately preceding 'text' — used to disambiguate when 'text' appears multiple times. Pass an empty string if the file is small and disambiguation isn't needed."
+                        ],
+                        "suffix": [
+                            "type": "string",
+                            "description": "Up to ~32 characters from the file immediately following 'text'."
+                        ],
+                        "note": [
+                            "type": "string",
+                            "description": "The question or comment you want the user to see. Will appear as the annotation's primary note above the thread."
+                        ]
+                    ],
+                    "required": ["path", "text", "prefix", "suffix", "note"],
                     "additionalProperties": false
                 ]
             ]
@@ -118,6 +211,7 @@ struct MindleMCP {
         guard let name = params["name"] as? String else {
             return errorContent("missing tool name")
         }
+        let arguments = (params["arguments"] as? [String: Any]) ?? [:]
         switch name {
         case "list_open_files":
             return callMindle(op: "list_open_files", body: [:]) { resp in
@@ -130,6 +224,96 @@ struct MindleMCP {
                 let listing = files.map { "- \($0)" }.joined(separator: "\n")
                 return textContent("Files currently open in Mindle:\n\n\(listing)")
             }
+
+        case "get_annotations":
+            guard let path = arguments["path"] as? String else {
+                return errorContent("missing required argument: path")
+            }
+            return callMindle(op: "get_annotations", body: ["path": path]) { resp in
+                guard let anns = resp["annotations"] as? [[String: Any]] else {
+                    return errorContent("malformed response from Mindle")
+                }
+                if anns.isEmpty {
+                    return textContent("No annotations on \(path).")
+                }
+                var lines: [String] = ["Annotations on \(path):", ""]
+                for (i, ann) in anns.enumerated() {
+                    let id = (ann["id"] as? String) ?? "?"
+                    let text = (ann["text"] as? String) ?? ""
+                    let note = (ann["note"] as? String) ?? ""
+                    let author = (ann["author"] as? String) ?? "user"
+                    let authorTag = author == "agent" ? " (agent-authored)" : ""
+                    lines.append("\(i + 1). [id: \(id)]\(authorTag)")
+                    lines.append("   Selected: \(text.replacingOccurrences(of: "\n", with: " "))")
+                    if !note.isEmpty {
+                        lines.append("   Note: \(note)")
+                    }
+                    if let thread = ann["thread"] as? [[String: Any]], !thread.isEmpty {
+                        lines.append("   Thread:")
+                        for msg in thread {
+                            let mAuthor = (msg["author"] as? String) ?? "?"
+                            let mText = (msg["text"] as? String) ?? ""
+                            // Indent multi-line messages under the bullet so
+                            // the agent can scan a long thread without losing
+                            // the author column.
+                            let firstLine: String
+                            let restLines: [String]
+                            let parts = mText.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+                            firstLine = parts.first ?? ""
+                            restLines = Array(parts.dropFirst())
+                            lines.append("     - \(mAuthor): \(firstLine)")
+                            for r in restLines {
+                                lines.append("       \(r)")
+                            }
+                        }
+                    }
+                    lines.append("")
+                }
+                return textContent(lines.joined(separator: "\n"))
+            }
+
+        case "clear_annotation":
+            guard let path = arguments["path"] as? String,
+                  let id = arguments["id"] as? String,
+                  let summary = arguments["summary"] as? String else {
+                return errorContent("missing required arguments: path, id, summary")
+            }
+            return callMindle(
+                op: "clear_annotation",
+                body: ["path": path, "id": id, "summary": summary]
+            ) { _ in
+                return textContent("Cleared annotation \(id) on \(path).")
+            }
+
+        case "comment_on_annotation":
+            guard let path = arguments["path"] as? String,
+                  let id = arguments["id"] as? String,
+                  let text = arguments["text"] as? String else {
+                return errorContent("missing required arguments: path, id, text")
+            }
+            return callMindle(
+                op: "comment_on_annotation",
+                body: ["path": path, "id": id, "text": text]
+            ) { _ in
+                return textContent("Posted reply to annotation \(id) on \(path).")
+            }
+
+        case "create_annotation":
+            guard let path = arguments["path"] as? String,
+                  let text = arguments["text"] as? String,
+                  let note = arguments["note"] as? String else {
+                return errorContent("missing required arguments: path, text, note")
+            }
+            let prefix = (arguments["prefix"] as? String) ?? ""
+            let suffix = (arguments["suffix"] as? String) ?? ""
+            return callMindle(
+                op: "create_annotation",
+                body: ["path": path, "text": text, "prefix": prefix, "suffix": suffix, "note": note]
+            ) { resp in
+                let newID = (resp["id"] as? String) ?? "?"
+                return textContent("Opened annotation \(newID) on \(path).")
+            }
+
         default:
             return errorContent("unknown tool: \(name)")
         }

@@ -59,6 +59,82 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return ordered
     }
 
+    /// Find the first store that has `path` open and return its
+    /// annotations. Returns nil if the file isn't open in any window —
+    /// the agent should first call `list_open_files` to see what's
+    /// available.
+    func annotations(forPath path: String) -> [Annotation]? {
+        registeredStores.removeAll { $0.store == nil }
+        for ref in registeredStores {
+            if let anns = ref.store?.annotations(forPath: path) {
+                return anns
+            }
+        }
+        return nil
+    }
+
+    /// Remove the annotation with the given id from whichever store has
+    /// the file open. Returns true on success. The summary captures the
+    /// agent's description of what it did to address the annotation —
+    /// stashed for now, surfaced in the UI in Phase 3.
+    func clearAnnotation(forPath path: String, id: UUID, summary: String) -> Bool {
+        registeredStores.removeAll { $0.store == nil }
+        for ref in registeredStores {
+            guard let store = ref.store else { continue }
+            if store.removeAnnotation(forPath: path, id: id, summary: summary) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Append a message to an existing annotation's thread, in
+    /// whichever window has the file open.
+    func appendThreadMessage(
+        forPath path: String,
+        annotationID: UUID,
+        author: String,
+        text: String
+    ) -> Bool {
+        registeredStores.removeAll { $0.store == nil }
+        for ref in registeredStores {
+            if ref.store?.appendThreadMessage(
+                forPath: path,
+                annotationID: annotationID,
+                author: author,
+                text: text
+            ) == true {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Create a new agent-authored annotation in whichever window has
+    /// the file open. Returns the new annotation's id, or nil if the
+    /// file isn't open in any window.
+    func createAgentAnnotation(
+        forPath path: String,
+        text: String,
+        prefix: String,
+        suffix: String,
+        note: String
+    ) -> UUID? {
+        registeredStores.removeAll { $0.store == nil }
+        for ref in registeredStores {
+            if let id = ref.store?.createAgentAnnotation(
+                forPath: path,
+                text: text,
+                prefix: prefix,
+                suffix: suffix,
+                note: note
+            ) {
+                return id
+            }
+        }
+        return nil
+    }
+
     func application(_ sender: NSApplication, open urls: [URL]) {
         if let store = activeStore {
             for url in urls {

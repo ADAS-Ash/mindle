@@ -150,6 +150,112 @@ final class MCPServer {
         case "list_open_files":
             let files = await MainActor.run { AppDelegate.shared?.allOpenFilePaths() ?? [] }
             return ["ok": true, "files": files]
+
+        case "get_annotations":
+            guard let path = request["path"] as? String else {
+                return ["ok": false, "error": "missing 'path'"]
+            }
+            let normalized = URL(fileURLWithPath: path).standardizedFileURL.path
+            let result: [[String: Any]]? = await MainActor.run {
+                guard let anns = AppDelegate.shared?.annotations(forPath: normalized) else {
+                    return nil
+                }
+                let iso = ISO8601DateFormatter()
+                return anns.map { ann -> [String: Any] in
+                    var payload: [String: Any] = [
+                        "id": ann.id.uuidString,
+                        "text": ann.text,
+                        "prefix": ann.prefix,
+                        "suffix": ann.suffix,
+                        "note": ann.note,
+                        "author": ann.author ?? "user",
+                        "createdAt": iso.string(from: ann.createdAt)
+                    ]
+                    if let thread = ann.thread, !thread.isEmpty {
+                        payload["thread"] = thread.map { msg -> [String: Any] in
+                            [
+                                "id": msg.id.uuidString,
+                                "author": msg.author,
+                                "text": msg.text,
+                                "createdAt": iso.string(from: msg.createdAt)
+                            ]
+                        }
+                    }
+                    return payload
+                }
+            }
+            guard let annotations = result else {
+                return ["ok": false, "error": "file not open in Mindle: \(path)"]
+            }
+            return ["ok": true, "annotations": annotations]
+
+        case "comment_on_annotation":
+            guard let path = request["path"] as? String else {
+                return ["ok": false, "error": "missing 'path'"]
+            }
+            guard let idStr = request["id"] as? String, let id = UUID(uuidString: idStr) else {
+                return ["ok": false, "error": "missing or malformed 'id' (expected UUID string)"]
+            }
+            guard let text = request["text"] as? String, !text.isEmpty else {
+                return ["ok": false, "error": "missing or empty 'text'"]
+            }
+            let normalized = URL(fileURLWithPath: path).standardizedFileURL.path
+            let appended = await MainActor.run {
+                AppDelegate.shared?.appendThreadMessage(
+                    forPath: normalized, annotationID: id, author: "agent", text: text
+                ) ?? false
+            }
+            if appended {
+                return ["ok": true]
+            }
+            return ["ok": false, "error": "annotation not found (file may not be open or id is stale)"]
+
+        case "create_annotation":
+            guard let path = request["path"] as? String else {
+                return ["ok": false, "error": "missing 'path'"]
+            }
+            guard let text = request["text"] as? String, !text.isEmpty else {
+                return ["ok": false, "error": "missing or empty 'text'"]
+            }
+            guard let note = request["note"] as? String else {
+                return ["ok": false, "error": "missing 'note'"]
+            }
+            let prefix = (request["prefix"] as? String) ?? ""
+            let suffix = (request["suffix"] as? String) ?? ""
+            let normalized = URL(fileURLWithPath: path).standardizedFileURL.path
+            let newID = await MainActor.run {
+                AppDelegate.shared?.createAgentAnnotation(
+                    forPath: normalized,
+                    text: text,
+                    prefix: prefix,
+                    suffix: suffix,
+                    note: note
+                )
+            }
+            if let id = newID {
+                return ["ok": true, "id": id.uuidString]
+            }
+            return ["ok": false, "error": "file not open in Mindle: \(path)"]
+
+        case "clear_annotation":
+            guard let path = request["path"] as? String else {
+                return ["ok": false, "error": "missing 'path'"]
+            }
+            guard let idStr = request["id"] as? String, let id = UUID(uuidString: idStr) else {
+                return ["ok": false, "error": "missing or malformed 'id' (expected UUID string)"]
+            }
+            let summary = (request["summary"] as? String) ?? ""
+            let normalized = URL(fileURLWithPath: path).standardizedFileURL.path
+            let removed = await MainActor.run {
+                AppDelegate.shared?.clearAnnotation(
+                    forPath: normalized, id: id, summary: summary
+                ) ?? false
+            }
+            if removed {
+                return ["ok": true]
+            }
+            return ["ok": false, "error": "annotation not found (file may not be open or id is stale)"]
+
         default:
             return ["ok": false, "error": "unknown op: \(op)"]
         }
