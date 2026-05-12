@@ -72,7 +72,7 @@ struct ContentView: View {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
                     store.showAnnotations = true
-                    store.highlightSelection()
+                    store.requestHighlight()
                 } label: {
                     Image(systemName: "highlighter")
                         .foregroundStyle(store.hasSelection ? c.accent : c.muted.opacity(0.5))
@@ -82,7 +82,7 @@ struct ContentView: View {
 
                 Button {
                     store.showAnnotations = true
-                    store.addNoteToSelection()
+                    store.requestNote()
                 } label: {
                     Image(systemName: "text.bubble")
                         .foregroundStyle(store.hasSelection ? c.accent : c.muted.opacity(0.5))

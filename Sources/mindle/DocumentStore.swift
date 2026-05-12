@@ -120,6 +120,14 @@ final class DocumentStore: ObservableObject {
     // Bumped to trigger a PDF export in the WKWebView coordinator.
     @Published var pdfExportRequestedAt: Date? = nil
 
+    // ⌘⇧H / ⌘⇧N can't use the cached selection — it's debounced 150ms in
+    // JS, so a quick select-then-hotkey would read stale or empty state.
+    // These signals tell WebReaderView to probe the live selection via
+    // window.mindleCaptureSelectionNow(), then call back into
+    // applyHighlight / applyNote with the fresh values.
+    @Published var highlightRequestedAt: Date? = nil
+    @Published var noteRequestedAt: Date? = nil
+
     // FSEvents-based watcher on the active file. Replaced whenever the
     // active fileURL changes (open / tab activate / close).
     private var fileWatcher: FileWatcher?
@@ -361,6 +369,28 @@ final class DocumentStore: ObservableObject {
         selectionText = text
         selectionPrefix = prefix
         selectionSuffix = suffix
+    }
+
+    /// Bump the request signal — WebReaderView observes this, fetches the
+    /// live selection from JS, and calls applyHighlight with fresh values.
+    func requestHighlight() { highlightRequestedAt = Date() }
+    func requestNote() { noteRequestedAt = Date() }
+
+    /// Called by WebReaderView once the JS round-trip returns the live
+    /// selection. Overwrites the cached selection with the fresh capture,
+    /// then runs the standard highlight/note path.
+    func applyHighlight(text: String, prefix: String, suffix: String) {
+        selectionText = text
+        selectionPrefix = prefix
+        selectionSuffix = suffix
+        highlightSelection()
+    }
+
+    func applyNote(text: String, prefix: String, suffix: String) {
+        selectionText = text
+        selectionPrefix = prefix
+        selectionSuffix = suffix
+        addNoteToSelection()
     }
 
     // MARK: - Annotations

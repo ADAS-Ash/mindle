@@ -631,14 +631,39 @@
     if (!flatSel || !flatSel.trim()) return null;
 
     const fullFlat = getDocFlatText();
+    // Use the range's actual position in the flat doc text — indexOf
+    // would always return the first occurrence, attributing prefix/suffix
+    // to the wrong spot when the selected text appears earlier in the doc.
+    let idx = flatOffsetAtRangeStart(range);
+    if (idx < 0) idx = fullFlat.indexOf(flatSel);
+
     let prefix = "", suffix = "";
-    const idx = fullFlat.indexOf(flatSel);
     if (idx >= 0) {
       prefix = fullFlat.substring(Math.max(0, idx - 48), idx);
       suffix = fullFlat.substring(idx + flatSel.length, idx + flatSel.length + 48);
     }
     return { text: flatSel, prefix: prefix, suffix: suffix };
   }
+
+  function flatOffsetAtRangeStart(range) {
+    const start = range.startContainer;
+    if (start.nodeType !== Node.TEXT_NODE) return -1;
+    const walker = document.createTreeWalker(doc, NodeFilter.SHOW_TEXT, null);
+    let offset = 0;
+    while (walker.nextNode()) {
+      const n = walker.currentNode;
+      if (n === start) return offset + range.startOffset;
+      offset += n.nodeValue.length;
+    }
+    return -1;
+  }
+
+  // Synchronous selection probe for the ⌘⇧H / ⌘⇧N hotkeys. Bypasses the
+  // 150ms selectionchange debounce so a fast select-then-highlight can't
+  // anchor against a stale (or empty) cached selection in Swift.
+  window.mindleCaptureSelectionNow = function () {
+    return captureSelection() || { text: "", prefix: "", suffix: "" };
+  };
 
   let selTimer = null;
   document.addEventListener("selectionchange", () => {

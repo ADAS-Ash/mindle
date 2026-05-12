@@ -113,6 +113,20 @@ struct WebReaderView: NSViewRepresentable {
             coord.lastPDFExportAt = t
             coord.runPDFExport()
         }
+
+        if let t = store.highlightRequestedAt, t != coord.lastHighlightAt {
+            coord.lastHighlightAt = t
+            coord.fetchLiveSelection(web: web) { text, prefix, suffix in
+                self.store.applyHighlight(text: text, prefix: prefix, suffix: suffix)
+            }
+        }
+
+        if let t = store.noteRequestedAt, t != coord.lastNoteAt {
+            coord.lastNoteAt = t
+            coord.fetchLiveSelection(web: web) { text, prefix, suffix in
+                self.store.applyNote(text: text, prefix: prefix, suffix: suffix)
+            }
+        }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -134,8 +148,25 @@ struct WebReaderView: NSViewRepresentable {
         var lastSearchNextAt: Date?
         var lastSearchPrevAt: Date?
         var lastPDFExportAt: Date?
+        var lastHighlightAt: Date?
+        var lastNoteAt: Date?
 
         init(_ p: WebReaderView) { parent = p }
+
+        /// Pull the current selection straight out of JS, bypassing the
+        /// debounced `selectionChanged` cache. Used by ⌘⇧H / ⌘⇧N so the
+        /// hotkeys can't fire against a stale selection state.
+        func fetchLiveSelection(web: WKWebView, completion: @escaping (String, String, String) -> Void) {
+            web.evaluateJavaScript("window.mindleCaptureSelectionNow();") { result, _ in
+                let body = result as? [String: Any] ?? [:]
+                let text = (body["text"] as? String) ?? ""
+                let prefix = (body["prefix"] as? String) ?? ""
+                let suffix = (body["suffix"] as? String) ?? ""
+                Task { @MainActor in
+                    completion(text, prefix, suffix)
+                }
+            }
+        }
 
         // US Letter in points — WKWebView's createPDF measures in pt (1 px = 1 pt).
         static let pdfPageWidth: CGFloat = 612

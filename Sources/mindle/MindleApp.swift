@@ -267,14 +267,14 @@ struct MindleCommands: Commands {
             Divider()
             Button("Highlight Selection") {
                 store?.showAnnotations = true
-                store?.highlightSelection()
+                store?.requestHighlight()
             }
             .keyboardShortcut("h", modifiers: [.command, .shift])
             .disabled(store == nil)
 
             Button("Add Note to Selection…") {
                 store?.showAnnotations = true
-                store?.addNoteToSelection()
+                store?.requestNote()
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
             .disabled(store == nil)
