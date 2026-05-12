@@ -98,7 +98,24 @@ final class DocumentStore: ObservableObject {
     private var selectionSuffix: String = ""
 
     @Published var focusedAnnotation: UUID? = nil
-    @Published var editingAnnotationID: UUID? = nil
+    /// When the user creates an annotation via ⌘⇧N, the annotation appears
+    /// with an empty note and the editor opens. Each transition of
+    /// editingAnnotationID *away* from a value commits any pending
+    /// annotation: the `created` event fires here, not at append time,
+    /// so the watch loop sees the finished note instead of an empty
+    /// shell. (Highlights via ⌘⇧H are complete on creation and emit
+    /// immediately — they don't go through this path.)
+    @Published var editingAnnotationID: UUID? = nil {
+        didSet {
+            if let prev = oldValue, prev != editingAnnotationID {
+                commitPendingAnnotation(id: prev)
+            }
+        }
+    }
+    /// Set of annotation ids that were created via the note-editor path
+    /// and haven't surfaced as `created` events yet. They commit when
+    /// editing moves off them.
+    private var pendingCommitAnnotations: Set<UUID> = []
 
     // Bumped to trigger a PDF export in the WKWebView coordinator.
     @Published var pdfExportRequestedAt: Date? = nil
@@ -350,18 +367,37 @@ final class DocumentStore: ObservableObject {
 
     func highlightSelection() {
         guard hasSelection else { NSSound.beep(); return }
-        // Toggle off if an annotation already exists with identical text+context
         if let i = annotations.firstIndex(where: {
             $0.text == selectionText && $0.prefix == selectionPrefix && $0.suffix == selectionSuffix
         }) {
+            let removed = annotations[i]
             annotations.remove(at: i)
+            if let url = fileURL {
+                AnnotationEventLog.shared.append(
+                    kind: .deleted,
+                    path: url.path,
+                    annotationID: removed.id,
+                    annotation: nil,
+                    clientID: nil
+                )
+            }
         } else {
-            annotations.append(Annotation(
+            let ann = Annotation(
                 text: selectionText,
                 prefix: selectionPrefix,
                 suffix: selectionSuffix,
                 note: ""
-            ))
+            )
+            annotations.append(ann)
+            if let url = fileURL {
+                AnnotationEventLog.shared.append(
+                    kind: .created,
+                    path: url.path,
+                    annotationID: ann.id,
+                    annotation: ann,
+                    clientID: nil
+                )
+            }
         }
         saveSidecar()
     }
@@ -382,10 +418,33 @@ final class DocumentStore: ObservableObject {
                 note: ""
             )
             annotations.append(ann)
+            // Defer the `created` event until the user finishes typing
+            // the note — see editingAnnotationID's didSet. Emitting now
+            // would race with the typing: the watch loop would wake on
+            // an empty note before the user got past their first word.
+            pendingCommitAnnotations.insert(ann.id)
             editingAnnotationID = ann.id
             focusedAnnotation = ann.id
             saveSidecar()
         }
+    }
+
+    /// Fire the deferred `created` event for an annotation that was
+    /// opened via the note-editor path, now that the user has finished
+    /// editing it. Called automatically when editingAnnotationID moves
+    /// off this annotation (Done click, Return commit, focusing a
+    /// different annotation, window/tab change).
+    private func commitPendingAnnotation(id: UUID) {
+        guard pendingCommitAnnotations.remove(id) != nil else { return }
+        guard let url = fileURL,
+              let ann = annotations.first(where: { $0.id == id }) else { return }
+        AnnotationEventLog.shared.append(
+            kind: .created,
+            path: url.path,
+            annotationID: ann.id,
+            annotation: ann,
+            clientID: nil
+        )
     }
 
     func updateNote(id: UUID, note: String) {
@@ -395,7 +454,27 @@ final class DocumentStore: ObservableObject {
     }
 
     func delete(id: UUID) {
+        // If the annotation never surfaced a `created` event (still in
+        // the note-editor pending state), drop it from the pending set
+        // so commitPendingAnnotation can't fire on a later
+        // editingAnnotationID transition.
+        pendingCommitAnnotations.remove(id)
+        guard let url = fileURL else {
+            annotations.removeAll { $0.id == id }
+            saveSidecar()
+            return
+        }
+        let removed = annotations.first(where: { $0.id == id })
         annotations.removeAll { $0.id == id }
+        if removed != nil {
+            AnnotationEventLog.shared.append(
+                kind: .deleted,
+                path: url.path,
+                annotationID: id,
+                annotation: nil,
+                clientID: nil
+            )
+        }
         saveSidecar()
     }
 
@@ -423,7 +502,8 @@ final class DocumentStore: ObservableObject {
         forPath path: String,
         annotationID: UUID,
         author: String,
-        text: String
+        text: String,
+        clientID: String? = nil
     ) -> Bool {
         let message = AnnotationMessage(author: author, text: text)
         if let active = activeTabID,
@@ -436,6 +516,14 @@ final class DocumentStore: ObservableObject {
             thread.append(message)
             annotations[j].thread = thread
             saveSidecar()
+            AnnotationEventLog.shared.append(
+                kind: .threadReply,
+                path: path,
+                annotationID: annotationID,
+                annotation: annotations[j],
+                messageID: message.id,
+                clientID: clientID
+            )
             return true
         }
         if let i = tabs.firstIndex(where: { $0.fileURL.path == path }) {
@@ -446,6 +534,14 @@ final class DocumentStore: ObservableObject {
             thread.append(message)
             tabs[i].annotations[j].thread = thread
             saveSidecar(forTab: tabs[i])
+            AnnotationEventLog.shared.append(
+                kind: .threadReply,
+                path: path,
+                annotationID: annotationID,
+                annotation: tabs[i].annotations[j],
+                messageID: message.id,
+                clientID: clientID
+            )
             return true
         }
         return false
@@ -460,7 +556,8 @@ final class DocumentStore: ObservableObject {
         text: String,
         prefix: String,
         suffix: String,
-        note: String
+        note: String,
+        clientID: String? = nil
     ) -> UUID? {
         let ann = Annotation(
             text: text,
@@ -476,11 +573,25 @@ final class DocumentStore: ObservableObject {
             annotations.append(ann)
             showAnnotations = true
             saveSidecar()
+            AnnotationEventLog.shared.append(
+                kind: .created,
+                path: path,
+                annotationID: ann.id,
+                annotation: ann,
+                clientID: clientID
+            )
             return ann.id
         }
         if let i = tabs.firstIndex(where: { $0.fileURL.path == path }) {
             tabs[i].annotations.append(ann)
             saveSidecar(forTab: tabs[i])
+            AnnotationEventLog.shared.append(
+                kind: .created,
+                path: path,
+                annotationID: ann.id,
+                annotation: ann,
+                clientID: clientID
+            )
             return ann.id
         }
         return nil
@@ -492,7 +603,7 @@ final class DocumentStore: ObservableObject {
     /// summary is stashed in NSLog for now — Phase 3 surfaces it in the
     /// UI as a chip next to the corresponding diff chunk.
     @discardableResult
-    func removeAnnotation(forPath path: String, id: UUID, summary: String) -> Bool {
+    func removeAnnotation(forPath path: String, id: UUID, summary: String, clientID: String? = nil) -> Bool {
         NSLog("[mindle.mcp] clear_annotation path=%@ id=%@ summary=%@", path, id.uuidString, summary)
         if let active = activeTabID,
            let i = tabs.firstIndex(where: { $0.id == active }),
@@ -502,12 +613,26 @@ final class DocumentStore: ObservableObject {
             // saveSidecar() pulls from in-memory annotations of the
             // active tab, so this persists correctly.
             saveSidecar()
+            AnnotationEventLog.shared.append(
+                kind: .deleted,
+                path: path,
+                annotationID: id,
+                annotation: nil,
+                clientID: clientID
+            )
             return true
         }
         if let i = tabs.firstIndex(where: { $0.fileURL.path == path }) {
             guard tabs[i].annotations.contains(where: { $0.id == id }) else { return false }
             tabs[i].annotations.removeAll { $0.id == id }
             saveSidecar(forTab: tabs[i])
+            AnnotationEventLog.shared.append(
+                kind: .deleted,
+                path: path,
+                annotationID: id,
+                annotation: nil,
+                clientID: clientID
+            )
             return true
         }
         return false
