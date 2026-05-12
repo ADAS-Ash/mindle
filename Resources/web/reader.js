@@ -267,13 +267,48 @@
       if (cursor < chunk.addStart) {
         source += current.slice(cursor, chunk.addStart);
       }
-      source += renderChunkBlock(chunk);
+      // If this chunk falls inside an open code fence, we have to break
+      // the fence to insert the chunk's HTML — otherwise markdown-it
+      // treats our `<div>` as literal code text. The chunk renderer
+      // handles the close/reopen plumbing when fenceCtx.inFence is true.
+      const fenceCtx = fenceContextAt(current, chunk.addStart);
+      source += renderChunkBlock(chunk, fenceCtx);
       cursor = chunk.addEnd;
     }
     if (cursor < current.length) {
       source += current.slice(cursor);
     }
     return unwrapFrontmatter(source);
+  }
+
+  // Walk lines from 0..position and track whether we end inside an open
+  // ``` / ~~~ code fence. When inside, return the opening fence line
+  // verbatim so the diff renderer can reopen the same fence (preserving
+  // the info string / language tag) after the chunk.
+  function fenceContextAt(source, position) {
+    const lines = source.substring(0, position).split("\n");
+    let inFence = false;
+    let fenceLine = null;
+    let fenceMarker = null;
+    for (const line of lines) {
+      if (!inFence) {
+        const open = line.match(/^\s{0,3}(`{3,}|~{3,})/);
+        if (open) {
+          inFence = true;
+          fenceLine = line;
+          fenceMarker = open[1];
+        }
+      } else {
+        // Closing fence: same marker char, length ≥ opening, no info.
+        const close = line.match(/^\s{0,3}(`{3,}|~{3,})\s*$/);
+        if (close && close[1][0] === fenceMarker[0] && close[1].length >= fenceMarker.length) {
+          inFence = false;
+          fenceLine = null;
+          fenceMarker = null;
+        }
+      }
+    }
+    return { inFence, fenceLine, fenceMarker };
   }
 
   function computeDiffChunks(lastSynced, current) {
@@ -312,13 +347,74 @@
     return chunks;
   }
 
-  function renderChunkBlock(chunk) {
-    // Pre-render before/after through markdown-it so block markdown
-    // (lists, code fences, headings) inside a chunk renders correctly.
-    // The outer wrapper is a raw HTML block — markdown-it leaves it
-    // alone since blank lines surround it.
-    const beforeHTML = chunk.before.trim() ? md.render(chunk.before) : "";
-    const afterHTML = chunk.after.trim() ? md.render(chunk.after) : "";
+  // Inside a line-level chunk, compute a word-level diff between the
+  // before and after text and return two HTML-ready strings:
+  //   before — with removed words wrapped in <del class="…-word-removed">
+  //   after  — with added words wrapped in <ins class="…-word-added">
+  // Common words appear in both, unwrapped.
+  //
+  // diff parts may span newlines. We wrap per-line (splitting the value
+  // and rewrapping each non-empty segment) so the inline <del>/<ins>
+  // tags never straddle a paragraph or list-item boundary — markdown-it
+  // is happy to find inline HTML inside a paragraph, but a tag that
+  // opens in one block and closes in another would break parsing.
+  function annotateWordDiff(before, after) {
+    if (!window.Diff || typeof window.Diff.diffWordsWithSpace !== "function") {
+      return { before: before, after: after };
+    }
+    const parts = window.Diff.diffWordsWithSpace(before, after);
+    let beforeOut = "";
+    let afterOut = "";
+    for (const p of parts) {
+      if (p.added) {
+        afterOut += wrapPerLine(p.value, "ins", "mindle-diff-word-added");
+      } else if (p.removed) {
+        beforeOut += wrapPerLine(p.value, "del", "mindle-diff-word-removed");
+      } else {
+        beforeOut += p.value;
+        afterOut += p.value;
+      }
+    }
+    return { before: beforeOut, after: afterOut };
+  }
+
+  function wrapPerLine(value, tag, cls) {
+    const lines = value.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].length === 0) continue;
+      lines[i] = "<" + tag + ' class="' + cls + '">' + lines[i] + "</" + tag + ">";
+    }
+    return lines.join("\n");
+  }
+
+  function renderChunkBlock(chunk, fenceCtx) {
+    // Within each line-level chunk, run a second-pass word diff to
+    // identify the exact words that changed — strike-through them in
+    // the before block, emphasise them in the after block. Common
+    // words on both sides render plain, so the eye lands on the
+    // actual delta instead of re-reading the entire line.
+    const { before: beforeAnnotated, after: afterAnnotated } =
+      annotateWordDiff(chunk.before, chunk.after);
+
+    const insideFence = !!(fenceCtx && fenceCtx.inFence);
+
+    // Two rendering paths:
+    //   * Inside a code fence — present before/after as <pre><code>
+    //     directly. Running md.render here would smart-quote the text
+    //     and strip the monospace styling that makes code legible.
+    //   * Outside — pre-render through markdown-it so block markdown
+    //     (lists, headings, etc.) inside the chunk renders correctly.
+    // Either way, <del>/<ins> word-diff tags pass through as inline
+    // HTML — the browser styles them via reader.css.
+    let beforeHTML = "", afterHTML = "";
+    if (insideFence) {
+      if (chunk.before.trim()) beforeHTML = wrapCodeBlock(beforeAnnotated);
+      if (chunk.after.trim())  afterHTML  = wrapCodeBlock(afterAnnotated);
+    } else {
+      if (chunk.before.trim()) beforeHTML = md.render(beforeAnnotated);
+      if (chunk.after.trim())  afterHTML  = md.render(afterAnnotated);
+    }
+
     let body = "";
     if (beforeHTML) body += '<div class="mindle-diff-removed">' + beforeHTML + '</div>';
     if (afterHTML)  body += '<div class="mindle-diff-added">'   + afterHTML  + '</div>';
@@ -327,11 +423,26 @@
         '<button data-mindle-diff-action="accept" data-mindle-diff-id="' + chunk.id + '">✓ Keep</button>' +
         '<button data-mindle-diff-action="reject" data-mindle-diff-id="' + chunk.id + '">✗ Revert</button>' +
       '</div>';
-    return "\n\n" +
+    const div =
       '<div class="mindle-diff-chunk" data-mindle-diff-id="' + chunk.id + '">' +
       body + controls +
-      '</div>' +
-      "\n\n";
+      '</div>';
+
+    // When we're inside an open code fence, the surrounding ```/~~~
+    // would otherwise treat our <div> as literal code text. Close the
+    // fence before the chunk and reopen it after with the same info
+    // string, so the surrounding (unchanged) code lines stay as code
+    // blocks while the diff chunk floats between them as HTML.
+    if (insideFence) {
+      const closer = fenceCtx.fenceMarker;
+      const reopen = fenceCtx.fenceLine;
+      return "\n" + closer + "\n\n" + div + "\n\n" + reopen + "\n";
+    }
+    return "\n\n" + div + "\n\n";
+  }
+
+  function wrapCodeBlock(content) {
+    return '<pre><code>' + content + '</code></pre>';
   }
 
   function removeDiffBanner() {

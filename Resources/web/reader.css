@@ -497,8 +497,6 @@ html.mindle-print-mode .mindle-mermaid {
 
 .mindle-diff-removed {
   background: rgba(192, 57, 43, 0.10);
-  text-decoration: line-through;
-  text-decoration-color: rgba(192, 57, 43, 0.55);
 }
 
 .mindle-diff-removed > :first-child { margin-top: 0; }
@@ -510,6 +508,49 @@ html.mindle-print-mode .mindle-mermaid {
 
 .mindle-diff-added > :first-child { margin-top: 0; }
 .mindle-diff-added > :last-child  { margin-bottom: 0; }
+
+/* When a chunk spans content inside a code fence the inner before/after
+   render as <pre><code> directly (md.render would smart-quote and
+   strip the monospace). The pre's own background hides the diff tint
+   under it, so we let the diff block's color show through and tone
+   down the pre's padding. */
+.mindle-diff-removed > pre,
+.mindle-diff-added > pre {
+  background: transparent;
+  margin: 0;
+  padding: 0.15em 0;
+}
+
+/* When the chunk sits at the very start or end of a fenced code block,
+   our close-and-reopen plumbing emits an empty `<pre><code></code></pre>`
+   on the empty side. Hide it so the diff chunk floats clean between
+   the surrounding code-block fragments. */
+.mindle-diff-chunk + pre:has(> code:empty),
+pre:has(> code:empty):has(+ .mindle-diff-chunk) {
+  display: none;
+}
+
+/* Word-level marks inside a chunk. The whole removed/added block carries
+   the line-level tint above; the inner <del>/<ins> spans pull the eye
+   to the actual delta within the line. */
+.mindle-diff-word-removed {
+  text-decoration: line-through;
+  text-decoration-color: rgba(192, 57, 43, 0.85);
+  text-decoration-thickness: 2px;
+  background: rgba(192, 57, 43, 0.20);
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.mindle-diff-word-added {
+  text-decoration: underline;
+  text-decoration-color: rgba(39, 174, 96, 0.85);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+  background: rgba(39, 174, 96, 0.22);
+  padding: 0 2px;
+  border-radius: 2px;
+}
 
 .mindle-diff-banner {
   position: sticky;
@@ -606,4 +647,11 @@ html.mindle-print-mode .mindle-diff-added {
   background: transparent !important;
   padding: 0 !important;
   margin: 0 !important;
+}
+/* The word-level emphasis is editorial chrome — strip it in print mode
+   so the exported PDF reads as the accepted final text. */
+html.mindle-print-mode .mindle-diff-word-added {
+  background: transparent !important;
+  text-decoration: none !important;
+  padding: 0 !important;
 }
