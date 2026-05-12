@@ -7,10 +7,13 @@ just before </channel>, keeping older releases in the feed so users on
 older versions can still see a consistent update chain.
 
 Arguments (positional):
-  version        e.g. "1.3.0"
+  version        e.g. "1.3.0" or "2.1.0-rc1"
   build_number   e.g. "42"
   ed_signature   base64 EdDSA signature of the DMG (from sign_update)
   length         byte length of the DMG (from sign_update)
+  channel        OPTIONAL Sparkle channel (e.g. "beta"). When set, the item
+                 gets a <sparkle:channel> tag and is only delivered to users
+                 who have opted into that channel. Omit for stable releases.
 
 Environment (optional):
   APPCAST_PATH   path to appcast.xml (default: docs/appcast.xml)
@@ -21,11 +24,12 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-if len(sys.argv) != 5:
+if len(sys.argv) not in (5, 6):
     print(__doc__, file=sys.stderr)
     sys.exit(2)
 
 version, build_number, ed_signature, length = sys.argv[1:5]
+channel = sys.argv[5] if len(sys.argv) == 6 else ""
 repo = os.environ.get("REPO", "nonatofabio/mindle")
 appcast = Path(os.environ.get("APPCAST_PATH", "docs/appcast.xml"))
 
@@ -48,12 +52,15 @@ description_html = (
     '</p>'
 )
 
+channel_xml = f'      <sparkle:channel>{channel}</sparkle:channel>\n' if channel else ""
+
 item_xml = (
     f'    <item>\n'
     f'      <title>Version {version}</title>\n'
     f'      <pubDate>{pub_date}</pubDate>\n'
     f'      <sparkle:shortVersionString>{version}</sparkle:shortVersionString>\n'
     f'      <sparkle:version>{build_number}</sparkle:version>\n'
+    f'{channel_xml}'
     f'      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>\n'
     f'      <description><![CDATA[{description_html}]]></description>\n'
     f'      <enclosure url="{download_url}" '

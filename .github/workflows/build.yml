@@ -245,8 +245,15 @@ jobs:
           git fetch origin main
           git checkout -B main origin/main
 
+          # Pre-release tags (e.g. v2.1.0-rc1) ship on the `beta` channel:
+          # only users who flip "Include Pre-release Updates" in the App
+          # menu will be offered them. Stable tags get no channel and are
+          # delivered to everyone.
+          CHANNEL=""
+          case "$VERSION" in *-*) CHANNEL="beta" ;; esac
+
           /usr/bin/python3 scripts/update-appcast.py \
-            "$VERSION" "$BUILD_NUMBER" "$ED_SIG" "$LEN"
+            "$VERSION" "$BUILD_NUMBER" "$ED_SIG" "$LEN" "$CHANNEL"
 
           if git diff --quiet docs/appcast.xml; then
             echo "appcast unchanged; nothing to commit."

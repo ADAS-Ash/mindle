@@ -21,11 +21,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // has SUFeedURL set, Sparkle prompts the user to choose whether to
     // enable automatic checks — opt-in, off by default for Mindle.
     let updaterController: SPUStandardUpdaterController
+    private let updaterDelegate: UpdaterDelegate
 
     override init() {
+        let delegate = UpdaterDelegate()
+        self.updaterDelegate = delegate
         self.updaterController = SPUStandardUpdaterController(
             startingUpdater: true,
-            updaterDelegate: nil,
+            updaterDelegate: delegate,
             userDriverDelegate: nil
         )
         super.init()
@@ -223,6 +226,7 @@ struct MindleCommands: Commands {
             Button("About Mindle") { showAboutPanel() }
             Divider()
             CheckForUpdatesView()
+            BetaUpdatesToggle()
             Divider()
             Button("Set as Default for Markdown…") {
                 showDefaultHandlerInstructions(currentFile: store?.fileURL)
@@ -349,6 +353,18 @@ struct CheckForUpdatesView: View {
         Button("Check for Updates…") {
             AppDelegate.shared?.updaterController.checkForUpdates(nil)
         }
+    }
+}
+
+/// Menu toggle that opts the user into the `beta` Sparkle channel. When
+/// on, Sparkle's allowedChannels callback (UpdaterDelegate) returns
+/// `["beta"]`, so the updater starts considering appcast items tagged
+/// `<sparkle:channel>beta</sparkle:channel>`. Stable items remain visible
+/// either way. SwiftUI renders this as a checkmarked menu item.
+struct BetaUpdatesToggle: View {
+    @AppStorage(kBetaUpdatesKey) private var betaUpdates: Bool = false
+    var body: some View {
+        Toggle("Include Pre-release Updates", isOn: $betaUpdates)
     }
 }
 
