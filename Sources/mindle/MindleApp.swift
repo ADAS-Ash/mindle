@@ -416,8 +416,20 @@ private func showAboutPanel() {
     )
     body.append(coffee)
 
+    // Pass the version + build explicitly. AppKit's panel pulls
+    // CFBundleShortVersionString through Apple's stricter "N.N.N"
+    // parser, which drops the pre-release suffix on strings like
+    // "2.1.0-rc2" — users would see "2.1.0" and think they're on a
+    // different build than the one they installed. Reading the Info
+    // dictionary ourselves and handing the panel the full string
+    // bypasses that normalisation.
+    let info = Bundle.main.infoDictionary
+    let shortVersion = (info?["CFBundleShortVersionString"] as? String) ?? ""
+    let buildNumber = (info?["CFBundleVersion"] as? String) ?? ""
     NSApp.orderFrontStandardAboutPanel(options: [
-        .credits: body
+        .credits: body,
+        .applicationVersion: shortVersion,
+        .version: buildNumber
     ])
     NSApp.activate(ignoringOtherApps: true)
 }
