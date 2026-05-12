@@ -12,6 +12,7 @@
   <a href="https://nonatofabio.github.io/mindle/"><strong>Website</strong></a> &bull;
   <a href="#install">Install</a> &bull;
   <a href="#features">Features</a> &bull;
+  <a href="#agent-collaboration">Agents</a> &bull;
   <a href="#keyboard-shortcuts">Shortcuts</a> &bull;
   <a href="#build-from-source">Build</a> &bull;
   <a href="#roadmap">Roadmap</a>
@@ -29,7 +30,9 @@
 
 **Mindle** is a native macOS Markdown reader built for focused, distraction-free reading. Think of it as a personal e-reader for your `.md` files — serif typography, warm themes, and the ability to highlight and annotate passages without ever leaving the document.
 
-No Electron. No subscriptions. No network calls. Just a fast, local, single-binary SwiftUI app.
+Since v2.0, Mindle also speaks MCP. When you're collaborating with an AI agent on a document, your annotations become a back-and-forth channel anchored to the passage — you mark up, the agent picks up the event, addresses it, replies inline in the thread. The conversation lives in the file, not in a chat window.
+
+No Electron. No subscriptions. No telemetry. The auto-update check is the only network call, and it's opt-in.
 
 ## Install
 
@@ -70,9 +73,18 @@ Requires **macOS 14+** and **Xcode Command Line Tools** (`xcode-select --install
 
 ### Annotation
 - **Highlight & note** — select any passage, press `⌘⇧H` to highlight or `⌘⇧N` to attach a note. Works across paragraphs, headings, lists, and code blocks.
-- **Annotations sidebar** — toggle with `⌘⇧A`. Click any annotation to jump to its passage; notes are editable inline.
+- **Annotations sidebar** — toggle with `⌘⇧A`. Click any annotation to jump to its passage; notes are editable inline. The new card auto-scrolls into view.
+- **Threads** — each annotation carries a conversation. You and the agent can reply back and forth in a single-column transcript with author-keyed left stripes (gray for the agent, accent for you). Return commits a reply; Shift+Return inserts a newline.
 - **Persistent locally** — saved to a hidden `.yourfile.md.mindle.json` sidecar. Nothing leaves your machine.
 - **Export** — `⌘⇧E` exports highlights and notes as Markdown or JSON.
+
+### Agent collaboration (new in v2.0)
+- **Read-side parity** — an agent can list every file you have open in Mindle and read your annotations on each. Selection text and surrounding context arrive verbatim, so the agent knows exactly what you're pointing at.
+- **Write-side affordances** — the agent can post comments to a thread, open a fresh annotation on a passage ("does this read better?"), and dismiss its own annotations with a one-line summary. Agent-authored annotations are visually distinct (muted dot, "Agent" label).
+- **Ambient watch loop** — a long-polling tool lets the agent wait for your next annotation or thread reply. You annotate, the agent wakes within a second, addresses it, waits again. Pure MCP, so any compatible client (Claude Code, Codex, Cursor, custom) can drive the loop.
+- **Self-filtering** — the agent's own mutations never wake itself. Each helper process gets a per-launch UUID; events tagged with that UUID are filtered out of its own watch responses.
+
+See [Agent Collaboration](#agent-collaboration) below for setup.
 
 ### Plumbing
 - **Native Swift / SwiftUI** — no Electron. Single-binary app, no frameworks to install at runtime.
@@ -98,6 +110,39 @@ Requires **macOS 14+** and **Xcode Command Line Tools** (`xcode-select --install
 | `⌘+` / `⌘-` | Increase / decrease font size |
 | `⌘⌥⏎` | Keep all in-flight changes |
 | `⌘⌥⌫` | Revert all in-flight changes |
+| `Return` (in annotation editor) | Commit the note / reply |
+| `⇧Return` (in annotation editor) | Insert a newline |
+
+## Agent Collaboration
+
+Mindle ships an MCP (Model Context Protocol) server so an agent can read your open files, see your annotations, and join the conversation. The collaboration loop is the headline v2.0 feature; everything below is optional but rewarding.
+
+### Setup with Claude Code
+
+```bash
+claude mcp add mindle /Applications/Mindle.app/Contents/MacOS/mindle-mcp
+```
+
+Restart Claude Code so it handshakes the new server, then ask:
+
+> watch my Mindle annotations and answer them
+
+The agent calls `wait_for_annotation_event` in a loop. You annotate (`⌘⇧N` for a note, then type, then Return); the agent wakes within a second, reads the surrounding context, and posts a reply in the thread or edits the file and clears the annotation.
+
+Any MCP-aware client works the same way — the tool descriptions carry enough protocol guidance that vanilla agents run the loop without a custom skill.
+
+### Tools exposed
+
+| Tool | Direction | What it does |
+|------|-----------|--------------|
+| `list_open_files` | read | Every file open in any Mindle window |
+| `get_annotations(path)` | read | Annotations + threads on a file |
+| `comment_on_annotation(path, id, text)` | write | Append an agent message to a thread |
+| `create_annotation(path, text, prefix, suffix, note)` | write | Open an agent-authored annotation on a passage |
+| `clear_annotation(path, id, summary)` | write | Mark an annotation done with a summary |
+| `wait_for_annotation_event(timeout_seconds, since_event_id)` | read | Long-poll for the next user event (created / thread reply / deleted) |
+
+The server is read-only as far as the file system is concerned — file IO stays in the agent's own tools. Mindle exposes only the annotation channel.
 
 ## Architecture
 
@@ -119,11 +164,19 @@ Annotations use a **text + context** anchoring strategy (inspired by [Hypothes.i
 
 ## Roadmap
 
-The big-picture plan lives in [`docs/v2-roadmap.md`](docs/v2-roadmap.md). Headlines:
+The big-picture plan lives in [`docs/v2-roadmap.md`](docs/v2-roadmap.md). Where we are:
 
-- **v2.0 — MCP collaboration loop.** Mindle becomes the calm review surface for agent-driven markdown work. The agent writes, you read, you mark up; the agent reads your annotations back via Mindle's read-only MCP server and revises. A bundled skill teaches Claude Code (and friends) the loop.
-- **v2.1 — Multi-user collaboration foundation.** Identity, author-stamped annotations, diff-banner attribution, and cloud-drive folder detection. A colleague editing your file in iCloud/OneDrive/Dropbox becomes architecturally indistinguishable from an agent — Mindle just makes you see them. No new sync code; the cloud drive is the transport.
+**Shipped**
+
+- ✅ **v2.0 — MCP collaboration loop.** Mindle is the review surface for agent-driven markdown work. The agent writes, you mark up; the agent reads your annotations and threads back, replies inline, or addresses them by editing the file. See [Agent Collaboration](#agent-collaboration).
+
+**Next**
+
+- **v2.1 — Multi-user collaboration foundation.** Identity, author-stamped annotations, diff-banner attribution, and cloud-drive folder detection. A colleague editing your file in iCloud / OneDrive / Dropbox becomes architecturally indistinguishable from an agent — Mindle just makes you see them. No new sync code; the cloud drive is the transport.
 - **v2.2 — Bring-your-own sync (S3 first).** A `SyncProvider` protocol with an S3 backend for teams whose markdown lives in a bucket. ETag-based optimistic concurrency, conflicts surfaced through the same diff-on-reload UX.
+
+**Eventually**
+
 - **Homebrew cask** — `brew install --cask mindle` for one-line install.
 - **iOS / iPadOS port** — multiplatform build sharing the same WebKit reader and annotation engine.
 
