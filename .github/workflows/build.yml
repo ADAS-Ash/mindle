@@ -100,6 +100,18 @@ jobs:
               "$EXT"
           fi
 
+          # The mindle-mcp helper is a second Mach-O in Contents/MacOS.
+          # The outer bundle's codesign call seals it as a resource but
+          # doesn't give it its own Developer ID signature, secure
+          # timestamp, or hardened runtime — all three are required for
+          # notarization. Sign it independently before the outer pass.
+          HELPER="build/Mindle.app/Contents/MacOS/mindle-mcp"
+          if [ -e "$HELPER" ]; then
+            /usr/bin/codesign --force --options runtime --timestamp \
+              --sign "$SIGN_IDENTITY" \
+              "$HELPER"
+          fi
+
           /usr/bin/codesign --force --options runtime --timestamp \
             --entitlements Entitlements.plist \
             --sign "$SIGN_IDENTITY" \
