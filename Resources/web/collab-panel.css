@@ -104,6 +104,18 @@ html, body {
   padding: 3px 6px;
   cursor: pointer;
 }
+.collab-panel__identity {
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  margin-left: auto;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.collab-panel__identity:hover {
+  background: var(--reply-bg);
+  color: var(--accent);
+}
 .collab-panel__refresh {
   background: none;
   border: 1px solid var(--border);

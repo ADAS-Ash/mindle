@@ -50,6 +50,10 @@ const CollabBridge = (() => {
     post("collabRefresh", {});
   }
 
+  function requestIdentityChange() {
+    post("collabIdentityChange", {});
+  }
+
   function scrollToAnchor(anchor) {
     post("collabScrollToAnchor", anchor);
   }
@@ -84,6 +88,7 @@ const CollabBridge = (() => {
     sendLabel,
     requestNewComment,
     sendRefresh,
+    requestIdentityChange,
     scrollToAnchor,
     scrollPanelToComment,
     receiveComments,

@@ -15,6 +15,11 @@ const CollabPanel = (() => {
   function init(user) {
     dbg('panel.init: ' + user);
     currentUser = user || "anonymous";
+    const badge = el(".collab-panel__identity");
+    if (badge) {
+      badge.textContent = "● " + currentUser;
+      badge.onclick = () => CollabBridge.requestIdentityChange();
+    }
     bindFilter();
     bindSort();
     bindResize();

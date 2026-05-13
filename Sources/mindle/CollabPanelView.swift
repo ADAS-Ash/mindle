@@ -13,7 +13,7 @@ struct CollabPanelView: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         let userContent = WKUserContentController()
-        for name in ["collabReply", "collabResolve", "collabAssign", "collabLabel", "collabNewComment", "collabRefresh", "collabScrollToAnchor"] {
+        for name in ["collabReply", "collabResolve", "collabAssign", "collabLabel", "collabNewComment", "collabRefresh", "collabScrollToAnchor", "collabIdentityChange"] {
             userContent.add(context.coordinator, name: name)
         }
         config.userContentController = userContent
@@ -139,7 +139,6 @@ struct CollabPanelView: NSViewRepresentable {
                 }
 
             case "collabScrollToAnchor":
-                // Tell the reader WebView to scroll to this anchor text
                 guard let text = body["text"] as? String else { return }
                 let jsText = text.replacingOccurrences(of: "\\", with: "\\\\")
                     .replacingOccurrences(of: "'", with: "\\'")
@@ -149,6 +148,26 @@ struct CollabPanelView: NSViewRepresentable {
                     object: nil,
                     userInfo: ["js": "window.mindleScrollToText('\(jsText)')"]
                 )
+                return
+
+            case "collabIdentityChange":
+                let alert = NSAlert()
+                alert.messageText = "Set Identity"
+                alert.informativeText = "Enter your alias (used as author in comments)"
+                alert.addButton(withTitle: "Save")
+                alert.addButton(withTitle: "Cancel")
+                let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+                input.stringValue = IdentityManager.shared.alias
+                input.placeholderString = "e.g. ash"
+                alert.accessoryView = input
+                alert.window.initialFirstResponder = input
+                if alert.runModal() == .alertFirstButtonReturn {
+                    let alias = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    if alias.count >= 2 {
+                        IdentityManager.shared.save(alias: alias, displayName: alias, color: IdentityManager.shared.whoAmI().color)
+                        web?.evaluateJavaScript("CollabBridge.receiveUser('\(alias)');")
+                    }
+                }
                 return
 
             default:
