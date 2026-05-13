@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MarkCollab — Comments</title>
+  <link rel="stylesheet" href="collab-panel.css">
+</head>
+<body>
+  <div class="collab-panel">
+    <!-- HEADER: always pinned at top -->
+    <div class="collab-panel__header">
+      <span class="collab-panel__title">Comments (0 open)</span>
+      <div class="collab-panel__actions-bar">
+        <button class="collab-panel__fab-inline" aria-label="New comment" title="New Comment">+</button>
+        <button class="collab-panel__refresh" aria-label="Refresh" title="Refresh">↻</button>
+        <button class="collab-panel__debug-toggle" onclick="document.getElementById('debug-log').style.display=document.getElementById('debug-log').style.display==='none'?'block':'none'" title="Toggle debug">🐛</button>
+      </div>
+      <select class="collab-panel__filter" aria-label="Filter comments">
+        <option value="all">All</option>
+        <option value="open">Open</option>
+        <option value="resolved">Resolved</option>
+        <option value="mine">My Assignments</option>
+      </select>
+      <select class="collab-panel__sort" aria-label="Sort comments">
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="position">Doc position</option>
+      </select>
+    </div>
+
+    <!-- COMMENTS LIST: scrolls independently -->
+    <div class="collab-panel__list">
+      <div class="collab-panel__empty">No comments yet.<br>Select text and click + to start.</div>
+    </div>
+
+    <!-- DEBUG LOG: pinned at bottom, hidden by default -->
+    <div id="debug-log" style="display:none;max-height:120px;overflow-y:auto;background:#111;color:#0f0;font:10px monospace;padding:4px 6px;border-top:1px solid #333;flex-shrink:0;">[debug] panel loaded<br></div>
+  </div>
+
+  <script src="collab-highlights.js"></script>
+  <script src="collab-bridge.js"></script>
+  <script src="collab-panel.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      CollabPanel.init("ash");
+    });
+  </script>
+</body>
+</html>
