@@ -254,6 +254,46 @@ html[data-theme="dark"] .hljs-number { color: #e7b46b; }
 /* -- KG-explorer style: ASCII art in code blocks stays crisp -- */
 pre, pre code { white-space: pre; }
 
+/* -- YAML frontmatter collapsible -- */
+details.mindle-frontmatter {
+  margin: 0.6em 0 1.6em;
+  border-left: 2px solid var(--rule);
+  padding-left: 0.8em;
+}
+details.mindle-frontmatter > summary {
+  cursor: pointer;
+  list-style: none;
+  font-family: ui-sans-serif, -apple-system, "Helvetica Neue", sans-serif;
+  font-size: 0.78em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0.2em 0;
+  user-select: none;
+}
+details.mindle-frontmatter > summary::-webkit-details-marker { display: none; }
+details.mindle-frontmatter > summary::before {
+  content: "▸ ";
+  display: inline-block;
+  width: 1em;
+  transition: transform 0.12s ease;
+}
+details.mindle-frontmatter[open] > summary::before {
+  transform: rotate(90deg);
+}
+details.mindle-frontmatter > summary:hover { color: var(--text); }
+details.mindle-frontmatter > pre {
+  margin-top: 0.4em;
+}
+
+/* Print mode strips the collapsible — frontmatter prints expanded so
+   the exported PDF contains the metadata in full. */
+html.mindle-print-mode details.mindle-frontmatter > summary { display: none; }
+html.mindle-print-mode details.mindle-frontmatter {
+  border-left: none;
+  padding-left: 0;
+}
+
 /* -- Mermaid diagrams (rendered from fenced mermaid code blocks) -- */
 .mindle-mermaid {
   display: block;

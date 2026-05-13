@@ -199,11 +199,20 @@
   // by `---` lines. By default markdown-it would render the fences as
   // <hr>s and the body as paragraph text, which loses both the framing
   // and the syntax. Rewriting it as a fenced yaml code block keeps the
-  // structure visible and routes through highlight.js for free.
+  // structure visible and routes through highlight.js for free. The
+  // fence sits inside a <details> so the metadata stays out of the
+  // reader's way by default — click the chevron to inspect it.
+  // Markdown-it treats <details>...<summary> as an HTML block (type 6)
+  // that ends at the first blank line, then re-enters markdown parsing
+  // for the fenced code, then sees </details> as another HTML block —
+  // so the yaml inside still flows through highlight.js.
   function unwrapFrontmatter(src) {
     const m = src.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
     if (!m) return src;
-    return "```yaml\n" + m[1] + "\n```\n\n" + src.slice(m[0].length);
+    return '<details class="mindle-frontmatter">\n' +
+           '<summary>YAML frontmatter</summary>\n\n' +
+           '```yaml\n' + m[1] + '\n```\n\n' +
+           '</details>\n\n' + src.slice(m[0].length);
   }
 
   // -------- Diff state (v1.6) --------
@@ -608,6 +617,12 @@
 
   window.mindleBeginPDFExport = function () {
     document.documentElement.classList.add("mindle-print-mode");
+    // Force any collapsed <details> open for export — the exported PDF
+    // must contain all content; the collapsible is editorial chrome.
+    document.querySelectorAll("details").forEach(d => {
+      d.dataset._mindleWasOpen = d.open ? "1" : "0";
+      d.open = true;
+    });
     void document.documentElement.offsetHeight;   // first reflow in new mode
     constrainMermaidSVGs();
     void document.documentElement.offsetHeight;   // settle svg size changes
@@ -619,6 +634,10 @@
   window.mindleEndPDFExport = function () {
     restorePageBreakMargins();
     restoreMermaidSVGs();
+    document.querySelectorAll("details").forEach(d => {
+      d.open = d.dataset._mindleWasOpen === "1";
+      delete d.dataset._mindleWasOpen;
+    });
     document.documentElement.classList.remove("mindle-print-mode");
   };
 
