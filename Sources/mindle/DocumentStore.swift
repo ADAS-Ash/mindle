@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import Combine
 
 enum ReaderTheme: String, CaseIterable, Codable {
     case light, sepia, dark
@@ -94,8 +95,8 @@ final class DocumentStore: ObservableObject {
 
     // Selection from the web view
     @Published private(set) var selectionText: String = ""
-    private var selectionPrefix: String = ""
-    private var selectionSuffix: String = ""
+    private(set) var selectionPrefix: String = ""
+    private(set) var selectionSuffix: String = ""
 
     @Published var focusedAnnotation: UUID? = nil
     /// When the user creates an annotation via ⌘⇧N, the annotation appears
@@ -127,6 +128,13 @@ final class DocumentStore: ObservableObject {
     // applyHighlight / applyNote with the fresh values.
     @Published var highlightRequestedAt: Date? = nil
     @Published var noteRequestedAt: Date? = nil
+
+    // MARK: - Collab
+    @Published var showCollabPanel: Bool = false
+    @Published var collabRevision: Int = 0
+    let collabEngine = CollabEngine()
+    private var collabWatcher: CollabFileWatcher?
+    private var collabWatcherSub: AnyCancellable?
 
     // FSEvents-based watcher on the active file. Replaced whenever the
     // active fileURL changes (open / tab activate / close).
@@ -193,6 +201,7 @@ final class DocumentStore: ObservableObject {
             self.lastSyncedText = text
             self.annotations = []
             self.loadSidecar()
+            self.loadCollabSidecar()
 
             // Capture the sidecar-loaded annotations into the tab snapshot.
             snapshotActiveTab()
@@ -905,5 +914,46 @@ final class DocumentStore: ObservableObject {
             out.append("")
         }
         return out.joined(separator: "\n")
+    }
+
+    // MARK: - Collab Sidecar
+
+    func loadCollabSidecar() {
+        guard let url = fileURL else { return }
+        try? collabEngine.load(for: url)
+        collabWatcher?.stop()
+        collabWatcher = CollabFileWatcher(engine: collabEngine)
+        collabWatcher?.watch(for: url)
+        collabWatcherSub = collabWatcher?.documentDidChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.collabRevision += 1 }
+    }
+
+    var collabCommentsJSON: String {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(collabEngine.document.annotations),
+              let json = String(data: data, encoding: .utf8) else { return "[]" }
+        return json
+    }
+
+    var collabCollaboratorsJSON: String {
+        let encoder = JSONEncoder()
+        guard let data = try? encoder.encode(collabEngine.document.collaborators),
+              let json = String(data: data, encoding: .utf8) else { return "{}" }
+        return json
+    }
+
+    func addCollabComment(body: String) {
+        guard hasSelection else { NSSound.beep(); return }
+        let anchor = TextAnchor(
+            text: selectionText,
+            prefix: String(selectionPrefix.suffix(48)),
+            suffix: String(selectionSuffix.prefix(48))
+        )
+        collabEngine.addAnnotation(anchor: anchor, author: IdentityManager.shared.alias, text: body)
+        try? collabEngine.save()
+        showCollabPanel = true
+        collabRevision += 1
     }
 }

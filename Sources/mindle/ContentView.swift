@@ -31,6 +31,10 @@ struct ContentView: View {
                             AnnotationsSidebar()
                                 .frame(minWidth: 280, idealWidth: 340, maxWidth: 460)
                         }
+                        if store.showCollabPanel {
+                            CollabPanelView()
+                                .frame(minWidth: 280, idealWidth: 340, maxWidth: 460)
+                        }
                     }
                 }
             }
@@ -117,6 +121,16 @@ struct ContentView: View {
                         .foregroundStyle(store.showAnnotations ? c.accent : c.muted)
                 }
                 .help("Toggle annotations (⌘⇧A)")
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        store.showCollabPanel.toggle()
+                    }
+                } label: {
+                    Image(systemName: "bubble.left.and.bubble.right")
+                        .foregroundStyle(store.showCollabPanel ? c.accent : c.muted)
+                }
+                .help("Toggle collab comments")
             }
         }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in

@@ -48,8 +48,9 @@ swiftc -O \
   -target arm64-apple-macos14.0 \
   -parse-as-library \
   -F Frameworks \
-  -framework SwiftUI -framework AppKit -framework Foundation -framework UniformTypeIdentifiers -framework WebKit -framework PDFKit -framework Sparkle \
+  -framework SwiftUI -framework AppKit -framework Foundation -framework UniformTypeIdentifiers -framework WebKit -framework PDFKit -framework Sparkle -framework CryptoKit \
   -Xlinker -rpath -Xlinker "@executable_path/../Frameworks" \
+  Sources/Collab/*.swift \
   Sources/mindle/*.swift \
   -o "$BIN"
 

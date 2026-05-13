@@ -16,6 +16,7 @@ struct WebReaderView: NSViewRepresentable {
         userContent.add(context.coordinator, name: "diffSetCurrent")
         userContent.add(context.coordinator, name: "diffAcceptAll")
         userContent.add(context.coordinator, name: "diffRejectAll")
+        userContent.add(context.coordinator, name: "collabNewComment")
         config.userContentController = userContent
         config.setURLSchemeHandler(ImageSchemeHandler(), forURLScheme: ImageSchemeHandler.scheme)
         config.defaultWebpagePreferences.allowsContentJavaScript = true
@@ -267,6 +268,13 @@ struct WebReaderView: NSViewRepresentable {
             DispatchQueue.main.async {
                 self.parent.store.objectWillChange.send()
             }
+
+            // Listen for scroll-to-anchor requests from the collab panel
+            NotificationCenter.default.addObserver(forName: Notification.Name("collabScrollReader"), object: nil, queue: .main) { [weak self] note in
+                guard let js = note.userInfo?["js"] as? String,
+                      let web = self?.web else { return }
+                web.evaluateJavaScript(js)
+            }
         }
 
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
@@ -337,6 +345,39 @@ struct WebReaderView: NSViewRepresentable {
             case "diffRejectAll":
                 Task { @MainActor in
                     self.parent.store.rejectAllChanges()
+                }
+
+            case "collabNewComment":
+                guard let body = message.body as? [String: Any],
+                      let text = body["text"] as? String, !text.isEmpty else { return }
+                let prefix = (body["prefix"] as? String) ?? ""
+                let suffix = (body["suffix"] as? String) ?? ""
+                Task { @MainActor in
+                    let store = self.parent.store
+                    store.updateSelection(text: text, prefix: prefix, suffix: suffix)
+                    store.showCollabPanel = true
+                    let alert = NSAlert()
+                    alert.messageText = "New Comment"
+                    alert.informativeText = "On: \"\(text.prefix(60))\""
+                    alert.addButton(withTitle: "Add")
+                    alert.addButton(withTitle: "Cancel")
+                    let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 60))
+                    input.placeholderString = "Your comment…"
+                    alert.accessoryView = input
+                    alert.window.initialFirstResponder = input
+                    if alert.runModal() == .alertFirstButtonReturn {
+                        let comment = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !comment.isEmpty {
+                            let anchor = TextAnchor(
+                                text: text,
+                                prefix: String(prefix.suffix(48)),
+                                suffix: String(suffix.prefix(48))
+                            )
+                            store.collabEngine.addAnnotation(anchor: anchor, author: IdentityManager.shared.alias, text: comment)
+                            try? store.collabEngine.save()
+                            store.collabRevision += 1
+                        }
+                    }
                 }
 
             default: break

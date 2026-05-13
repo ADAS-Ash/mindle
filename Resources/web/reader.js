@@ -776,6 +776,25 @@
     return captureSelection() || { text: "", prefix: "", suffix: "" };
   };
 
+  // Scroll to a text passage (called from collab panel anchor clicks)
+  window.mindleScrollToText = function (text) {
+    if (!text) return;
+    const walker = document.createTreeWalker(doc, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      if (node.textContent.indexOf(text) >= 0) {
+        const el = node.parentElement;
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          const orig = el.style.backgroundColor;
+          el.style.backgroundColor = "rgba(74,144,217,0.3)";
+          setTimeout(() => { el.style.backgroundColor = orig; }, 1500);
+        }
+        return;
+      }
+    }
+  };
+
   let selTimer = null;
   document.addEventListener("selectionchange", () => {
     if (selTimer) clearTimeout(selTimer);
@@ -784,6 +803,17 @@
       const cap = captureSelection();
       postToSwift("selectionChanged", cap || { text: "", prefix: "", suffix: "" });
     }, 150);
+  });
+
+  // ⌘⇧K — add collab comment on current selection
+  document.addEventListener("keydown", (e) => {
+    if (e.metaKey && e.shiftKey && e.code === "KeyK") {
+      e.preventDefault();
+      const cap = captureSelection();
+      if (cap && cap.text) {
+        postToSwift("collabNewComment", cap);
+      }
+    }
   });
 
   doc.addEventListener("click", (ev) => {

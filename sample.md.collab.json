@@ -1,0 +1,284 @@
+{
+  "annotations" : [
+    {
+      "anchor" : {
+        "prefix" : "# Mindle\n\n",
+        "suffix" : ".\n\n## What it does",
+        "text" : "A quiet place to read Markdown"
+      },
+      "assignee" : "priya",
+      "author" : "ash",
+      "createdAt" : "2026-05-12T18:00:00Z",
+      "id" : "a001",
+      "labels" : [
+        "question"
+      ],
+      "status" : "open",
+      "thread" : [
+        {
+          "author" : "ash",
+          "createdAt" : "2026-05-12T18:00:00Z",
+          "id" : "m001",
+          "text" : "Should we update this tagline now that it's collaborative?"
+        },
+        {
+          "author" : "claude",
+          "createdAt" : "2026-05-12T18:01:00Z",
+          "id" : "m002",
+          "text" : "Consider something like 'Collaborative markdown for teams' — keeps it short."
+        },
+        {
+          "author" : "priya",
+          "createdAt" : "2026-05-12T18:05:00Z",
+          "id" : "m003",
+          "text" : "Agreed with Claude. Let's update after Phase 1."
+        }
+      ]
+    },
+    {
+      "anchor" : {
+        "prefix" : "sidecar next to your file. ",
+        "suffix" : ".\n\n## Code",
+        "text" : "Nothing leaves your machine"
+      },
+      "author" : "priya",
+      "createdAt" : "2026-05-12T18:10:00Z",
+      "id" : "a002",
+      "labels" : [
+        "blocker"
+      ],
+      "status" : "open",
+      "thread" : [
+        {
+          "author" : "priya",
+          "createdAt" : "2026-05-12T18:10:00Z",
+          "id" : "m004",
+          "text" : "This claim needs updating — with OneDrive sync, data does leave the machine."
+        }
+      ]
+    },
+    {
+      "anchor" : {
+        "prefix" : "r style layout. You can:\n\nHighlight any paragrap",
+        "suffix" : "\nAttach a note to any block\nToggle between light",
+        "text" : "h with one click"
+      },
+      "author" : "anonymous",
+      "createdAt" : "2026-05-12T20:46:58Z",
+      "id" : "394C88C3-CB55-4481-9CB8-DD89BB1CB914",
+      "labels" : [
+
+      ],
+      "status" : "open",
+      "thread" : [
+        {
+          "author" : "anonymous",
+          "createdAt" : "2026-05-12T20:46:58Z",
+          "id" : "B7C9EDE0-C06E-4AB2-B0D0-D3251FC6D74C",
+          "text" : "hjhjbjk"
+        }
+      ]
+    },
+    {
+      "anchor" : {
+        "prefix" : "ader style layout. You can:\n\nHighlight any parag",
+        "suffix" : "\nAttach a note to any block\nToggle between light",
+        "text" : "raph with one click"
+      },
+      "author" : "anonymous",
+      "createdAt" : "2026-05-12T20:47:08Z",
+      "id" : "A8C7F23C-ACE5-46EA-BD15-E87FD6BE8150",
+      "labels" : [
+
+      ],
+      "status" : "open",
+      "thread" : [
+        {
+          "author" : "anonymous",
+          "createdAt" : "2026-05-12T20:47:08Z",
+          "id" : "4C90D39D-D1A1-40B0-9171-EE955B2F6759",
+          "text" : "lllll"
+        }
+      ]
+    },
+    {
+      "anchor" : {
+        "prefix" : "f, e-reader style layout. You can:\n\nHighlight an",
+        "suffix" : "\nPop out an annotations sidebar with ⌘⇧A\n\n\nAnnot",
+        "text" : "y paragraph with one click\nAttach a note to any block\nToggle between light, sepia, and dark themes\nZoom the type with ⌘+ and ⌘-"
+      },
+      "author" : "anonymous",
+      "createdAt" : "2026-05-12T20:47:26Z",
+      "id" : "C5CE34EF-0DAE-4610-8046-14E93460ECF5",
+      "labels" : [
+
+      ],
+      "status" : "open",
+      "thread" : [
+        {
+          "author" : "anonymous",
+          "createdAt" : "2026-05-12T20:47:26Z",
+          "id" : "3B8A90E1-2BF2-4172-ACEE-CF4EAC1E3F06",
+          "text" : "fefefefe"
+        }
+      ]
+    },
+    {
+      "anchor" : {
+        "prefix" : "le\nA quiet place to read Markdown.\nWhat it does\n",
+        "suffix" : "\nAttach a note to any block\nToggle between light",
+        "text" : "Open any .md file and read it in a clean, serif, e-reader style layout. You can:\n\nHighlight any paragraph with one click"
+      },
+      "author" : "anonymous",
+      "createdAt" : "2026-05-12T20:53:05Z",
+      "id" : "0CAE536F-E5BA-4159-9519-D3DF6464B57B",
+      "labels" : [
+
+      ],
+      "status" : "open",
+      "thread" : [
+        {
+          "author" : "anonymous",
+          "createdAt" : "2026-05-12T20:53:05Z",
+          "id" : "FC26FDF6-7616-4262-9F35-96744ED798F4",
+          "text" : "efefef"
+        }
+      ]
+    },
+    {
+      "anchor" : {
+        "prefix" : "le\nA quiet place to read Markdown.\nWhat it does\n",
+        "suffix" : "\nAttach a note to any block\nToggle between light",
+        "text" : "Open any .md file and read it in a clean, serif, e-reader style layout. You can:\n\nHighlight any paragraph with one click"
+      },
+      "author" : "anonymous",
+      "createdAt" : "2026-05-12T20:53:12Z",
+      "id" : "EAD31E01-AF4F-4FEA-B6EC-EA1D0CAD9B80",
+      "labels" : [
+
+      ],
+      "status" : "open",
+      "thread" : [
+        {
+          "author" : "anonymous",
+          "createdAt" : "2026-05-12T20:53:12Z",
+          "id" : "6235AE9B-4F5D-4846-8E7B-F33E170CA911",
+          "text" : "eeeee"
+        }
+      ]
+    },
+    {
+      "anchor" : {
+        "prefix" : "ou can:\n\nHighlight any paragraph with one click\n",
+        "suffix" : "\nToggle between light, sepia, and dark themes\nZo",
+        "text" : "Attach a note to any block"
+      },
+      "author" : "anonymous",
+      "createdAt" : "2026-05-12T20:54:57Z",
+      "id" : "35B024CD-96DA-4CA6-AEC1-2A352F5641F6",
+      "labels" : [
+
+      ],
+      "status" : "open",
+      "thread" : [
+        {
+          "author" : "anonymous",
+          "createdAt" : "2026-05-12T20:54:57Z",
+          "id" : "247F53EA-0E76-44DF-AD41-8CDA7DBFE69D",
+          "text" : "HelloAsh"
+        }
+      ]
+    },
+    {
+      "anchor" : {
+        "prefix" : " clean, serif, e-reader style layout. You can:\n\n",
+        "suffix" : "\nToggle between light, sepia, and dark themes\nZo",
+        "text" : "Highlight any paragraph with one click\nAttach a note to any block"
+      },
+      "author" : "anonymous",
+      "createdAt" : "2026-05-12T20:58:29Z",
+      "id" : "6CE524E4-1EE8-49CC-84D7-EC9811EC1053",
+      "labels" : [
+
+      ],
+      "status" : "open",
+      "thread" : [
+        {
+          "author" : "anonymous",
+          "createdAt" : "2026-05-12T20:58:29Z",
+          "id" : "78BB9F2F-0883-4CB8-998F-1B7135842695",
+          "text" : "Testing21:58"
+        }
+      ]
+    },
+    {
+      "anchor" : {
+        "prefix" : "th one click\nAttach a note to any block\nToggle b",
+        "suffix" : "\n\n\nAnnotations are saved in a hidden .yourfile.m",
+        "text" : "etween light, sepia, and dark themes\nZoom the type with ⌘+ and ⌘-\nPop out an annotations sidebar with ⌘⇧A"
+      },
+      "author" : "anonymous",
+      "createdAt" : "2026-05-12T21:04:06Z",
+      "id" : "46E21EA2-7397-4967-94B4-651C39928E86",
+      "labels" : [
+
+      ],
+      "resolvedAt" : "2026-05-12T21:25:54Z",
+      "resolvedBy" : "anonymous",
+      "status" : "resolved",
+      "thread" : [
+        {
+          "author" : "anonymous",
+          "createdAt" : "2026-05-12T21:04:06Z",
+          "id" : "5F5C5FB9-5E61-4C9A-B676-9A867B4A3D97",
+          "text" : "fffff"
+        }
+      ]
+    },
+    {
+      "anchor" : {
+        "prefix" : "ou can:\n\nHighlight any paragraph with one click\n",
+        "suffix" : "th ⌘⇧A\n\n\nAnnotations are saved in a hidden .your",
+        "text" : "Attach a note to any block\nToggle between light, sepia, and dark themes\nZoom the type with ⌘+ and ⌘-\nPop out an annotations sidebar wi"
+      },
+      "author" : "anonymous",
+      "createdAt" : "2026-05-12T21:25:34Z",
+      "id" : "0DE6ED21-FBD2-41DD-9CD7-F52C8868A2AF",
+      "labels" : [
+
+      ],
+      "resolvedAt" : "2026-05-12T21:25:49Z",
+      "resolvedBy" : "anonymous",
+      "status" : "resolved",
+      "thread" : [
+        {
+          "author" : "anonymous",
+          "createdAt" : "2026-05-12T21:25:34Z",
+          "id" : "1CA116ED-B091-4E7E-99A9-678EFDC39433",
+          "text" : "Hello World"
+        }
+      ]
+    }
+  ],
+  "collaborators" : {
+    "ash" : {
+      "color" : "#4A90D9",
+      "displayName" : "Ash",
+      "email" : "apnaik@amazon.co.uk",
+      "type" : "human"
+    },
+    "claude" : {
+      "color" : "#6B4FBB",
+      "displayName" : "Claude",
+      "mcp" : true,
+      "type" : "agent"
+    },
+    "priya" : {
+      "color" : "#D94A7A",
+      "displayName" : "Priya M",
+      "type" : "human"
+    }
+  },
+  "fileHash" : "sha256:71ea4fb6a65eb4cb9e7faef0972baf085786dda0b04a16c9a9737785dca9b109",
+  "version" : "2.0"
+}
