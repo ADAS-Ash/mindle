@@ -5,6 +5,8 @@ build/
 *~
 .sample.md.mindle.json
 *.mindle.json
+# Local agent-runner state (Claude Code, etc.) — never commit.
+.claude/
 # Never commit exported signing keys — belt-and-suspenders guard.
 *.key
 *.p12
