@@ -282,6 +282,57 @@ final class MCPServer {
                 "gap": result.gap
             ]
 
+        // MARK: - Collab ops
+
+        case "get_collab_annotations":
+            guard let path = request["path"] as? String else {
+                return ["ok": false, "error": "missing 'path'"]
+            }
+            let result: [String: Any] = await MainActor.run {
+                let url = URL(fileURLWithPath: path)
+                let engine = CollabEngine()
+                guard (try? engine.load(for: url)) != nil else {
+                    return ["ok": false, "error": "no collab sidecar for \(path)"]
+                }
+                let encoder = JSONEncoder()
+                encoder.dateEncodingStrategy = .iso8601
+                let data = (try? encoder.encode(engine.document)) ?? Data()
+                let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+                return ["ok": true, "document": json]
+            }
+            return result
+
+        case "collab_reply":
+            guard let path = request["path"] as? String,
+                  let annID = request["annotation_id"] as? String,
+                  let text = request["text"] as? String else {
+                return ["ok": false, "error": "missing path, annotation_id, or text"]
+            }
+            let author = (request["author"] as? String) ?? "agent"
+            let success: Bool = await MainActor.run {
+                let url = URL(fileURLWithPath: path)
+                let engine = CollabEngine()
+                guard (try? engine.load(for: url)) != nil else { return false }
+                engine.reply(to: annID, author: author, text: text)
+                return (try? engine.save()) != nil
+            }
+            return success ? ["ok": true] : ["ok": false, "error": "failed to reply"]
+
+        case "collab_resolve":
+            guard let path = request["path"] as? String,
+                  let annID = request["annotation_id"] as? String else {
+                return ["ok": false, "error": "missing path or annotation_id"]
+            }
+            let author = (request["author"] as? String) ?? "agent"
+            let success: Bool = await MainActor.run {
+                let url = URL(fileURLWithPath: path)
+                let engine = CollabEngine()
+                guard (try? engine.load(for: url)) != nil else { return false }
+                engine.resolve(annotationID: annID, by: author)
+                return (try? engine.save()) != nil
+            }
+            return success ? ["ok": true] : ["ok": false, "error": "failed to resolve"]
+
         default:
             return ["ok": false, "error": "unknown op: \(op)"]
         }

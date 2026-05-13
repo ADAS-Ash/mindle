@@ -795,6 +795,41 @@
     }
   };
 
+  // Apply collab annotation highlights in the reader (called from Swift)
+  window.mindleApplyCollabHighlights = function (annotations) {
+    // Remove existing collab highlights
+    document.querySelectorAll('mark.collab-hl').forEach(m => {
+      const parent = m.parentNode;
+      parent.replaceChild(document.createTextNode(m.textContent), m);
+      parent.normalize();
+    });
+    if (!annotations || !annotations.length) return;
+
+    annotations.forEach(ann => {
+      if (!ann.anchor || !ann.anchor.text) return;
+      const searchText = ann.anchor.text;
+      const color = ann._color || '#6B4FBB';
+      const walker = document.createTreeWalker(doc, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        const idx = node.textContent.indexOf(searchText);
+        if (idx === -1) continue;
+        const range = document.createRange();
+        range.setStart(node, idx);
+        range.setEnd(node, idx + searchText.length);
+        const mark = document.createElement('mark');
+        mark.className = 'collab-hl';
+        mark.dataset.collabId = ann.id;
+        mark.style.backgroundColor = color + '25';
+        mark.style.borderBottom = '2px solid ' + color;
+        mark.style.cursor = 'pointer';
+        mark.title = (ann.thread && ann.thread[0]) ? ann.thread[0].text || '' : '';
+        try { range.surroundContents(mark); } catch(e) { /* crosses element boundary */ }
+        break; // only highlight first occurrence
+      }
+    });
+  };
+
   let selTimer = null;
   document.addEventListener("selectionchange", () => {
     if (selTimer) clearTimeout(selTimer);

@@ -89,6 +89,13 @@ struct WebReaderView: NSViewRepresentable {
             }
         }
 
+        // Push collab highlights to reader
+        if store.collabRevision != coord.lastCollabRevision {
+            coord.lastCollabRevision = store.collabRevision
+            let collabJSON = store.collabCommentsJSON
+            web.evaluateJavaScript("window.mindleApplyCollabHighlights(\(collabJSON));")
+        }
+
         if let id = store.focusedAnnotation, id != coord.lastFocusID {
             coord.lastFocusID = id
             web.evaluateJavaScript("window.mindleFocusAnnotation(\(jsString(id.uuidString)));")
@@ -151,6 +158,7 @@ struct WebReaderView: NSViewRepresentable {
         var lastPDFExportAt: Date?
         var lastHighlightAt: Date?
         var lastNoteAt: Date?
+        var lastCollabRevision: Int = -1
 
         init(_ p: WebReaderView) { parent = p }
 
