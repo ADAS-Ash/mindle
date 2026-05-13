@@ -136,8 +136,43 @@ final class DocumentStore: ObservableObject {
 
     private var sidecarURL: URL? {
         guard let u = fileURL else { return nil }
+        // Remote (http/https) URLs don't have an adjacent on-disk location
+        // we can write to. Annotations on a fetched URL persist in app
+        // support, keyed by a stable hash of the URL string so the same
+        // page opens with its prior annotations next time.
+        if u.scheme == "http" || u.scheme == "https" {
+            return Self.urlSidecarsDir()?
+                .appendingPathComponent("\(Self.urlKey(for: u)).mindle.json")
+        }
         return u.deletingLastPathComponent()
             .appendingPathComponent(".\(u.lastPathComponent).mindle.json")
+    }
+
+    /// ~/Library/Application Support/Mindle/url-sidecars/. Created on first
+    /// access. Used to persist annotations for remote URL documents.
+    private static func urlSidecarsDir() -> URL? {
+        guard let support = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first else { return nil }
+        let dir = support
+            .appendingPathComponent("Mindle", isDirectory: true)
+            .appendingPathComponent("url-sidecars", isDirectory: true)
+        try? FileManager.default.createDirectory(
+            at: dir, withIntermediateDirectories: true
+        )
+        return dir
+    }
+
+    /// FNV-1a 64-bit hash of the URL's absolute string. Stable across launches,
+    /// short enough for a filename, collision-resistant for human-scale URL counts.
+    private static func urlKey(for url: URL) -> String {
+        var h: UInt64 = 14695981039346656037
+        for byte in url.absoluteString.utf8 {
+            h ^= UInt64(byte)
+            h = h &* 1099511628211
+        }
+        return String(format: "%016llx", h)
     }
 
     // MARK: - Open
@@ -235,8 +270,125 @@ final class DocumentStore: ObservableObject {
         fileWatcher?.stop()
         fileWatcher = nil
         guard let url = fileURL else { return }
+        // FSEvents only meaningfully watches local files. Remote URL tabs
+        // don't get a watcher — refreshing means re-opening from the menu.
+        guard url.isFileURL else { return }
         fileWatcher = FileWatcher(url: url) { [weak self] in
             self?.reloadFromDisk()
+        }
+    }
+
+    // MARK: - Open URL
+
+    /// Prompt the user for an http(s) URL and open it as a remote-content
+    /// tab. The fetched markdown opens like any other document — search,
+    /// annotations, export all work the same. Annotations persist to a
+    /// per-URL sidecar in app support (see `sidecarURL`).
+    func openURLWithPrompt() {
+        let alert = NSAlert()
+        alert.messageText = "Open URL"
+        alert.informativeText = "Enter the URL of a Markdown document (raw .md)."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Open")
+        alert.addButton(withTitle: "Cancel")
+
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
+        field.placeholderString = "https://example.com/README.md"
+        // Auto-fill from clipboard when it looks like a URL — saves a paste.
+        if let pb = NSPasteboard.general.string(forType: .string),
+           let u = URL(string: pb.trimmingCharacters(in: .whitespacesAndNewlines)),
+           let scheme = u.scheme?.lowercased(),
+           scheme == "http" || scheme == "https" {
+            field.stringValue = pb.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let raw = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: raw),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https" else {
+            let invalid = NSAlert()
+            invalid.messageText = "That doesn't look like an http(s) URL."
+            invalid.runModal()
+            return
+        }
+        openURL(url)
+    }
+
+    /// Open an http(s) URL: fetch the body off-main and open it as a tab
+    /// keyed on the URL. Already-open URLs activate instead of refetching.
+    func openURL(_ url: URL) {
+        if let existing = tabs.first(where: { $0.fileURL == url }) {
+            activate(tabID: existing.id)
+            return
+        }
+
+        // Open a placeholder tab immediately so the user sees the request
+        // landed; the fetch fills in the content when it returns.
+        snapshotActiveTab()
+        let placeholder = "# Loading…\n\n`\(url.absoluteString)`\n"
+        let newTab = DocumentTab(
+            id: UUID(),
+            fileURL: url,
+            rawText: placeholder,
+            annotations: [],
+            lastSyncedText: placeholder
+        )
+        tabs.append(newTab)
+        let newTabID = newTab.id
+        activeTabID = newTabID
+        fileURL = url
+        rawText = placeholder
+        lastSyncedText = placeholder
+        annotations = []
+        closeSearch()
+        focusedAnnotation = nil
+        editingAnnotationID = nil
+        updateSelection(text: "", prefix: "", suffix: "")
+        updateWatcher()  // no-op for remote URLs; clears any prior watcher
+
+        let task = URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+            guard let self else { return }
+            DispatchQueue.main.async {
+                self.handleURLResponse(
+                    tabID: newTabID, url: url,
+                    data: data, response: response, error: error
+                )
+            }
+        }
+        task.resume()
+    }
+
+    @MainActor
+    private func handleURLResponse(
+        tabID: UUID, url: URL,
+        data: Data?, response: URLResponse?, error: Error?
+    ) {
+        // If the user closed the tab while the request was in flight, drop
+        // the result on the floor — the URL is no longer being viewed.
+        guard let idx = tabs.firstIndex(where: { $0.id == tabID }) else { return }
+
+        let body: String
+        if let error {
+            body = "# Couldn't load\n\n`\(url.absoluteString)`\n\n```\n\(error.localizedDescription)\n```\n"
+        } else if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            body = "# HTTP \(http.statusCode)\n\n`\(url.absoluteString)`\n"
+        } else if let data, let text = String(data: data, encoding: .utf8) {
+            body = text
+        } else {
+            body = "# Couldn't decode as UTF-8\n\n`\(url.absoluteString)`\n"
+        }
+
+        tabs[idx].rawText = body
+        tabs[idx].lastSyncedText = body
+        // Only update the live view if the URL tab is still active.
+        if activeTabID == tabID {
+            rawText = body
+            lastSyncedText = body
+            loadSidecar()
+            snapshotActiveTab()
         }
     }
 
@@ -808,8 +960,16 @@ final class DocumentStore: ObservableObject {
     }
 
     private func saveSidecar(forTab tab: DocumentTab) {
-        let url = tab.fileURL.deletingLastPathComponent()
-            .appendingPathComponent(".\(tab.fileURL.lastPathComponent).mindle.json")
+        let scheme = tab.fileURL.scheme?.lowercased()
+        let url: URL?
+        if scheme == "http" || scheme == "https" {
+            url = Self.urlSidecarsDir()?
+                .appendingPathComponent("\(Self.urlKey(for: tab.fileURL)).mindle.json")
+        } else {
+            url = tab.fileURL.deletingLastPathComponent()
+                .appendingPathComponent(".\(tab.fileURL.lastPathComponent).mindle.json")
+        }
+        guard let url else { return }
         let baseline = (tab.lastSyncedText != tab.rawText) ? tab.lastSyncedText : nil
         writeSidecar(to: url, annotations: tab.annotations, lastSynced: baseline)
     }

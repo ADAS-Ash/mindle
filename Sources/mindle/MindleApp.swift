@@ -240,6 +240,9 @@ struct MindleCommands: Commands {
             Button("Open…") { store?.openWithPanel() }
                 .keyboardShortcut("o", modifiers: .command)
                 .disabled(store == nil)
+            Button("Open URL…") { store?.openURLWithPrompt() }
+                .keyboardShortcut("l", modifiers: [.command, .shift])
+                .disabled(store == nil)
             Divider()
             Button("Export Annotations…") { store?.exportAnnotationsWithPanel() }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
