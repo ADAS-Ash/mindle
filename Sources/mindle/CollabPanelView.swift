@@ -70,6 +70,12 @@ struct CollabPanelView: NSViewRepresentable {
             webView.evaluateJavaScript("CollabBridge.receiveTheme('\(store.theme.rawValue)');")
             pushAll()
             lastRevision = store.collabRevision
+
+            // Scroll panel to comment when reader highlight is clicked
+            NotificationCenter.default.addObserver(forName: Notification.Name("collabScrollPanelToComment"), object: nil, queue: .main) { [weak self] notif in
+                guard let id = notif.object as? String, let web = self?.web else { return }
+                web.evaluateJavaScript("CollabBridge.scrollPanelToComment('\(id)');")
+            }
         }
 
         // MARK: - WKScriptMessageHandler

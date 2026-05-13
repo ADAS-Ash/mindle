@@ -17,6 +17,7 @@ struct WebReaderView: NSViewRepresentable {
         userContent.add(context.coordinator, name: "diffAcceptAll")
         userContent.add(context.coordinator, name: "diffRejectAll")
         userContent.add(context.coordinator, name: "collabNewComment")
+        userContent.add(context.coordinator, name: "collabScrollPanel")
         config.userContentController = userContent
         config.setURLSchemeHandler(ImageSchemeHandler(), forURLScheme: ImageSchemeHandler.scheme)
         config.defaultWebpagePreferences.allowsContentJavaScript = true
@@ -353,6 +354,17 @@ struct WebReaderView: NSViewRepresentable {
             case "diffRejectAll":
                 Task { @MainActor in
                     self.parent.store.rejectAllChanges()
+                }
+
+            case "collabScrollPanel":
+                guard let body = message.body as? [String: Any],
+                      let annotationId = body["annotationId"] as? String else { return }
+                Task { @MainActor in
+                    self.parent.store.showCollabPanel = true
+                    NotificationCenter.default.post(
+                        name: Notification.Name("collabScrollPanelToComment"),
+                        object: annotationId
+                    )
                 }
 
             case "collabNewComment":

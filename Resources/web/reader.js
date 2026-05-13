@@ -824,6 +824,7 @@
         mark.style.borderBottom = '2px solid ' + color;
         mark.style.cursor = 'pointer';
         mark.title = (ann.thread && ann.thread[0]) ? ann.thread[0].text || '' : '';
+        mark.onclick = () => postToSwift("collabScrollPanel", { annotationId: ann.id });
         try { range.surroundContents(mark); } catch(e) { /* crosses element boundary */ }
         break; // only highlight first occurrence
       }
