@@ -442,6 +442,7 @@ struct MindleCommands: Commands {
             }
             .disabled(store == nil)
 
+
             Button("Debug Console") { DebugConsole.shared.toggle() }
                 .keyboardShortcut("d", modifiers: [.command, .shift])
         }
