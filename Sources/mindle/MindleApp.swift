@@ -55,7 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for ref in registeredStores {
             guard let store = ref.store else { continue }
             for tab in store.tabs {
-                let p = tab.fileURL.path
+                let p = tab.fileURL.canonicalPath
                 if seen.insert(p).inserted { ordered.append(p) }
             }
         }
@@ -143,9 +143,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func resolveAnnotation(forPath path: String, id: UUID, by author: String) -> Bool {
-        let normalized = URL(fileURLWithPath: path).standardizedFileURL.path
+        let normalized = URL(fileURLWithPath: path).canonicalPath
         for ref in registeredStores {
-            if ref.store?.fileURL?.path == normalized {
+            if ref.store?.fileURL?.canonicalPath == normalized {
                 ref.store?.resolveAnnotation(id: id, by: author)
                 return true
             }
@@ -154,9 +154,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func assignAnnotation(forPath path: String, id: UUID, to assignee: String) -> Bool {
-        let normalized = URL(fileURLWithPath: path).standardizedFileURL.path
+        let normalized = URL(fileURLWithPath: path).canonicalPath
         for ref in registeredStores {
-            if ref.store?.fileURL?.path == normalized {
+            if ref.store?.fileURL?.canonicalPath == normalized {
                 ref.store?.assignAnnotation(id: id, to: assignee)
                 return true
             }
@@ -165,9 +165,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func collaborators(forPath path: String) -> [String: Any]? {
-        let normalized = URL(fileURLWithPath: path).standardizedFileURL.path
+        let normalized = URL(fileURLWithPath: path).canonicalPath
         for ref in registeredStores {
-            if ref.store?.fileURL?.path == normalized {
+            if ref.store?.fileURL?.canonicalPath == normalized {
                 let collabs = ref.store?.collaborators ?? [:]
                 var result: [String: Any] = [:]
                 for (k, v) in collabs {

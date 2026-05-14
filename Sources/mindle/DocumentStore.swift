@@ -3,6 +3,18 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
+extension URL {
+    /// Canonical filesystem path with symlinks fully resolved. The match
+    /// key for any cross-process / MCP-style file lookup: `/tmp/foo`
+    /// (a symlink) and `/private/tmp/foo` (the resolved path) both
+    /// normalise to the same string. `standardizedFileURL` only resolves
+    /// trailing-component symlinks, which is why MCP path matching used
+    /// to fail for files under `/tmp` on macOS.
+    var canonicalPath: String {
+        resolvingSymlinksInPath().path
+    }
+}
+
 enum ReaderTheme: String, CaseIterable, Codable {
     case light, sepia, dark
 }
@@ -684,16 +696,19 @@ final class DocumentStore: ObservableObject {
     }
 
     /// MCP-side annotation lookup. Returns the annotations for whichever
-    /// tab in this window has `fileURL.path == path`, or nil if no tab
-    /// matches. Caller (AppDelegate) iterates every store to find a hit.
+    /// tab in this window has a canonical-path match against `path`, or
+    /// nil if no tab matches. Caller (AppDelegate) iterates every store
+    /// to find a hit. Path matching canonicalises symlinks on both sides
+    /// so e.g. `/tmp/foo` and `/private/tmp/foo` resolve to the same key.
     func annotations(forPath path: String) -> [Annotation]? {
+        let canonical = URL(fileURLWithPath: path).canonicalPath
         if let active = activeTabID,
            let tab = tabs.first(where: { $0.id == active }),
-           tab.fileURL.path == path {
+           tab.fileURL.canonicalPath == canonical {
             // Active tab — in-memory annotations are authoritative.
             return annotations
         }
-        if let tab = tabs.first(where: { $0.fileURL.path == path }) {
+        if let tab = tabs.first(where: { $0.fileURL.canonicalPath == canonical }) {
             return tab.annotations
         }
         return nil
@@ -712,9 +727,10 @@ final class DocumentStore: ObservableObject {
     ) -> Bool {
         DebugConsole.shared.log("REPLY: to \(annotationID.uuidString.prefix(8)) by \(author)")
         let message = AnnotationMessage(author: author, text: text)
+        let canonical = URL(fileURLWithPath: path).canonicalPath
         if let active = activeTabID,
            let i = tabs.firstIndex(where: { $0.id == active }),
-           tabs[i].fileURL.path == path {
+           tabs[i].fileURL.canonicalPath == canonical {
             guard let j = annotations.firstIndex(where: { $0.id == annotationID }) else {
                 return false
             }
@@ -732,7 +748,7 @@ final class DocumentStore: ObservableObject {
             )
             return true
         }
-        if let i = tabs.firstIndex(where: { $0.fileURL.path == path }) {
+        if let i = tabs.firstIndex(where: { $0.fileURL.canonicalPath == canonical }) {
             guard let j = tabs[i].annotations.firstIndex(where: { $0.id == annotationID }) else {
                 return false
             }
@@ -773,9 +789,10 @@ final class DocumentStore: ObservableObject {
             author: "agent",
             thread: nil
         )
+        let canonical = URL(fileURLWithPath: path).canonicalPath
         if let active = activeTabID,
            let i = tabs.firstIndex(where: { $0.id == active }),
-           tabs[i].fileURL.path == path {
+           tabs[i].fileURL.canonicalPath == canonical {
             annotations.append(ann)
             showAnnotations = true
             saveSidecar()
@@ -788,7 +805,7 @@ final class DocumentStore: ObservableObject {
             )
             return ann.id
         }
-        if let i = tabs.firstIndex(where: { $0.fileURL.path == path }) {
+        if let i = tabs.firstIndex(where: { $0.fileURL.canonicalPath == canonical }) {
             tabs[i].annotations.append(ann)
             saveSidecar(forTab: tabs[i])
             AnnotationEventLog.shared.append(
@@ -811,9 +828,10 @@ final class DocumentStore: ObservableObject {
     @discardableResult
     func removeAnnotation(forPath path: String, id: UUID, summary: String, clientID: String? = nil) -> Bool {
         NSLog("[mindle.mcp] clear_annotation path=%@ id=%@ summary=%@", path, id.uuidString, summary)
+        let canonical = URL(fileURLWithPath: path).canonicalPath
         if let active = activeTabID,
            let i = tabs.firstIndex(where: { $0.id == active }),
-           tabs[i].fileURL.path == path {
+           tabs[i].fileURL.canonicalPath == canonical {
             guard annotations.contains(where: { $0.id == id }) else { return false }
             annotations.removeAll { $0.id == id }
             // saveSidecar() pulls from in-memory annotations of the
@@ -828,7 +846,7 @@ final class DocumentStore: ObservableObject {
             )
             return true
         }
-        if let i = tabs.firstIndex(where: { $0.fileURL.path == path }) {
+        if let i = tabs.firstIndex(where: { $0.fileURL.canonicalPath == canonical }) {
             guard tabs[i].annotations.contains(where: { $0.id == id }) else { return false }
             tabs[i].annotations.removeAll { $0.id == id }
             saveSidecar(forTab: tabs[i])

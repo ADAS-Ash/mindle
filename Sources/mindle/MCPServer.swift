@@ -162,7 +162,7 @@ final class MCPServer {
             guard let path = request["path"] as? String else {
                 return ["ok": false, "error": "missing 'path'"]
             }
-            let normalized = URL(fileURLWithPath: path).standardizedFileURL.path
+            let normalized = URL(fileURLWithPath: path).canonicalPath
             let result: [[String: Any]]? = await MainActor.run {
                 guard let anns = AppDelegate.shared?.annotations(forPath: normalized) else {
                     return nil
@@ -187,7 +187,7 @@ final class MCPServer {
             guard let text = request["text"] as? String, !text.isEmpty else {
                 return ["ok": false, "error": "missing or empty 'text'"]
             }
-            let normalized = URL(fileURLWithPath: path).standardizedFileURL.path
+            let normalized = URL(fileURLWithPath: path).canonicalPath
             let appended = await MainActor.run {
                 AppDelegate.shared?.appendThreadMessage(
                     forPath: normalized,
@@ -214,7 +214,7 @@ final class MCPServer {
             }
             let prefix = (request["prefix"] as? String) ?? ""
             let suffix = (request["suffix"] as? String) ?? ""
-            let normalized = URL(fileURLWithPath: path).standardizedFileURL.path
+            let normalized = URL(fileURLWithPath: path).canonicalPath
             let newID = await MainActor.run {
                 AppDelegate.shared?.createAgentAnnotation(
                     forPath: normalized,
@@ -238,7 +238,7 @@ final class MCPServer {
                 return ["ok": false, "error": "missing or malformed 'id' (expected UUID string)"]
             }
             let summary = (request["summary"] as? String) ?? ""
-            let normalized = URL(fileURLWithPath: path).standardizedFileURL.path
+            let normalized = URL(fileURLWithPath: path).canonicalPath
             let removed = await MainActor.run {
                 AppDelegate.shared?.clearAnnotation(
                     forPath: normalized, id: id, summary: summary, clientID: clientID
