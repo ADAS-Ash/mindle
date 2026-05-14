@@ -227,6 +227,14 @@ mark.mindle-hl[style*="--collab-color"] {
 mark.mindle-hl.has-note {
   background: var(--highlight-note);
 }
+/* When a noted annotation also carries an author color, keep the
+   collab tint (so the author is still legible) and let the note
+   distinction come from the border. Without this override the
+   has-note rule above wins on cascade order and the collab color
+   disappears for any annotation with a note attached. */
+mark.mindle-hl.has-note[style*="--collab-color"] {
+  background: color-mix(in srgb, var(--collab-color) 28%, transparent);
+}
 mark.mindle-hl.focused {
   outline: 1.5px solid var(--accent);
   outline-offset: 1px;

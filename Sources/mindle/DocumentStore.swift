@@ -1075,7 +1075,6 @@ final class DocumentStore: ObservableObject {
         saveSidecar()
     }
 
-    /// Ensures the current user is in the sidecar's collaborators registry.
     // MARK: - Export
 
     enum ExportFormat { case markdown, json }

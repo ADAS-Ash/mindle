@@ -517,76 +517,74 @@ struct AnnotationCard: View {
                         .frame(width: 2)
                 }
 
-            // Collab: status + assign + labels (show when collab is active)
+            // Hidden for solo-use docs to keep simple highlights clean;
+            // surfaces once identity is set (auto-registers in
+            // collaborators) or any collab field is non-default.
             if annotation.status != nil || annotation.assignee != nil || annotation.labels != nil || !store.collaborators.isEmpty {
                 HStack(spacing: 6) {
                     let status = annotation.status ?? .open
                     Text(status.rawValue)
-                    .font(.system(size: 9, weight: .semibold))
-                    .textCase(.uppercase)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(status == .resolved ? Color.green.opacity(0.2) : Color.blue.opacity(0.15))
-                    .foregroundStyle(status == .resolved ? .green : c.accent)
-                    .clipShape(Capsule())
+                        .font(.system(size: 9, weight: .semibold))
+                        .textCase(.uppercase)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(status == .resolved ? Color.green.opacity(0.2) : Color.blue.opacity(0.15))
+                        .foregroundStyle(status == .resolved ? .green : c.accent)
+                        .clipShape(Capsule())
 
-                // Resolve/Reopen
-                Button(status == .resolved ? "Reopen" : "Resolve") {
-                    if status == .resolved {
-                        store.reopenAnnotation(id: annotation.id)
-                    } else {
-                        store.resolveAnnotation(id: annotation.id)
+                    Button(status == .resolved ? "Reopen" : "Resolve") {
+                        if status == .resolved {
+                            store.reopenAnnotation(id: annotation.id)
+                        } else {
+                            store.resolveAnnotation(id: annotation.id)
+                        }
                     }
-                }
-                .font(.system(size: 10))
-                .buttonStyle(.plain)
-                .foregroundStyle(c.muted)
+                    .font(.system(size: 10))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(c.muted)
 
-                Spacer()
+                    Spacer()
 
-                // Assign
-                Menu {
-                    ForEach(Array(store.collaborators.keys.sorted()), id: \.self) { alias in
-                        Button(alias) { store.assignAnnotation(id: annotation.id, to: alias) }
+                    Menu {
+                        ForEach(Array(store.collaborators.keys.sorted()), id: \.self) { alias in
+                            Button(alias) { store.assignAnnotation(id: annotation.id, to: alias) }
+                        }
+                    } label: {
+                        Text(annotation.assignee ?? "Assign")
+                            .font(.system(size: 10))
+                            .foregroundStyle(annotation.assignee != nil ? c.accent : c.muted)
                     }
-                } label: {
-                    Text(annotation.assignee ?? "Assign")
-                        .font(.system(size: 10))
-                        .foregroundStyle(annotation.assignee != nil ? c.accent : c.muted)
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
 
-                // Labels
-                Menu {
-                    ForEach(["question", "blocker", "nit", "todo", "suggestion"], id: \.self) { label in
-                        Button(label) { store.addLabel(to: annotation.id, label: label) }
-                    }
-                } label: {
-                    Image(systemName: "tag")
-                        .font(.system(size: 10))
-                        .foregroundStyle(c.muted)
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-            }
-            .padding(.top, 2)
-
-            // Labels display
-            if let labels = annotation.labels, !labels.isEmpty {
-                HStack(spacing: 4) {
-                    ForEach(labels, id: \.self) { label in
-                        Text(label)
-                            .font(.system(size: 9))
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(c.muted.opacity(0.15))
-                            .clipShape(Capsule())
+                    Menu {
+                        ForEach(["question", "blocker", "nit", "todo", "suggestion"], id: \.self) { label in
+                            Button(label) { store.addLabel(to: annotation.id, label: label) }
+                        }
+                    } label: {
+                        Image(systemName: "tag")
+                            .font(.system(size: 10))
                             .foregroundStyle(c.muted)
                     }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                }
+                .padding(.top, 2)
+
+                if let labels = annotation.labels, !labels.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(labels, id: \.self) { label in
+                            Text(label)
+                                .font(.system(size: 9))
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(c.muted.opacity(0.15))
+                                .clipShape(Capsule())
+                                .foregroundStyle(c.muted)
+                        }
+                    }
                 }
             }
-            } // end collab conditional
 
             if isEditing || !annotation.note.isEmpty {
                 TextEditor(text: $noteDraft)
