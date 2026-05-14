@@ -1014,11 +1014,19 @@ final class DocumentStore: ObservableObject {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
-        // Register current user in collaborators
+        // Auto-register the current user in the document's collaborator
+        // registry. The disk write picks up the new entry from `collabs`
+        // below, but we also have to mirror it back into the @Published
+        // `collaborators` map — otherwise the UI sees a stale empty
+        // registry and the conditional collab row on each annotation
+        // card stays hidden until the file is closed and reopened.
         var collabs = collaborators
         let im = IdentityManager.shared
         if im.isConfigured {
             collabs[im.alias] = im.asSidecarCollaborator()
+        }
+        if collabs != collaborators {
+            collaborators = collabs
         }
         let sidecar = Sidecar(
             annotations: annotations,
