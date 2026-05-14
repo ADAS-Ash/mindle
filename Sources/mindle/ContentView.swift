@@ -447,6 +447,50 @@ struct AnnotationsSidebar: View {
     }
 }
 
+// MARK: - Author identity helpers
+
+/// Maps an author string to a display color via the collaborator registry.
+/// Agents get the theme's muted tone. Pre-identity `"user"` sentinels and
+/// unregistered aliases fall back to the caller-supplied default so old
+/// sidecars look the way they did before collab.
+@MainActor
+private func authorColor(
+    _ author: String?,
+    store: DocumentStore,
+    fallback: Color
+) -> Color {
+    if author == "agent" { return store.theme.colors.muted }
+    if let alias = author,
+       alias != "user",
+       let hex = store.collaborators[alias]?.color {
+        return Color(hex: hex)
+    }
+    return fallback
+}
+
+/// Card-header alias label: prefers the registry's `displayName`, falls
+/// back to the raw alias, truncates to 8 chars with an ellipsis when
+/// longer. Returns nil for agents (the "AGENT" label already says it) and
+/// for unconfigured/unknown authors (so cards on solo docs stay clean).
+@MainActor
+private func displayAlias(_ author: String?, store: DocumentStore) -> String? {
+    guard let author,
+          author != "agent",
+          author != "user" else { return nil }
+    let name = store.collaborators[author]?.displayName ?? author
+    return name.count > 8 ? String(name.prefix(8)) + "…" : name
+}
+
+/// Thread-message label: always returns something because the author cue
+/// is the whole point of the row. Capitalised "Agent" for agents,
+/// truncated alias for everyone else.
+@MainActor
+private func threadAuthorLabel(_ author: String, store: DocumentStore) -> String {
+    if author == "agent" { return "Agent" }
+    let name = store.collaborators[author]?.displayName ?? author
+    return name.count > 8 ? String(name.prefix(8)) + "…" : name
+}
+
 struct AnnotationCard: View {
     let annotation: Annotation
     @EnvironmentObject var store: DocumentStore
@@ -467,12 +511,15 @@ struct AnnotationCard: View {
     var body: some View {
         let c = store.theme.colors
         let isFocused = store.focusedAnnotation == annotation.id
-        let dotColor: Color = isAgentAuthored
-            ? c.muted
-            : (annotation.note.isEmpty ? c.highlight : c.highlightNote)
+        let dotColor: Color = authorColor(
+            annotation.author,
+            store: store,
+            fallback: annotation.note.isEmpty ? c.highlight : c.highlightNote
+        )
         let typeLabel: String = isAgentAuthored
             ? "Agent"
             : (annotation.note.isEmpty ? "Highlight" : "Note")
+        let aliasLabel = displayAlias(annotation.author, store: store)
 
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
@@ -484,6 +531,13 @@ struct AnnotationCard: View {
                     .foregroundStyle(c.muted)
                     .textCase(.uppercase)
                     .tracking(0.5)
+                if let aliasLabel {
+                    Text("·").foregroundStyle(c.muted.opacity(0.4))
+                    Text(aliasLabel)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(dotColor)
+                        .lineLimit(1)
+                }
                 Spacer()
                 Button {
                     store.jumpTo(id: annotation.id)
@@ -822,7 +876,8 @@ struct AnnotationMessageRow: View {
     var body: some View {
         let c = store.theme.colors
         let isAgent = message.author == "agent"
-        let stripeColor = isAgent ? c.muted : c.accent
+        let stripeColor = authorColor(message.author, store: store, fallback: c.accent)
+        let authorLabel = threadAuthorLabel(message.author, store: store)
         HStack(alignment: .top, spacing: 8) {
             Rectangle()
                 .fill(stripeColor.opacity(isAgent ? 0.55 : 0.9))
@@ -832,9 +887,16 @@ struct AnnotationMessageRow: View {
                     .font(.system(size: 12, design: .serif))
                     .foregroundStyle(c.text)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(Self.timeFormatter.string(from: message.createdAt))
-                    .font(.system(size: 10))
-                    .foregroundStyle(c.muted)
+                HStack(spacing: 5) {
+                    Text(authorLabel)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(stripeColor)
+                        .lineLimit(1)
+                    Text("·").foregroundStyle(c.muted.opacity(0.4))
+                    Text(Self.timeFormatter.string(from: message.createdAt))
+                        .font(.system(size: 10))
+                        .foregroundStyle(c.muted)
+                }
             }
         }
     }
