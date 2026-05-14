@@ -83,6 +83,10 @@ struct DocumentTab: Identifiable, Equatable {
     /// updates `rawText`, this stays at the previously-reviewed version
     /// until the user accepts the change.
     var lastSyncedText: String
+    /// Collaborator registry for this document. Snapshotted on tab
+    /// switch-out and restored on switch-in so a window with multiple
+    /// docs open shows each document's own author colors/aliases.
+    var collaborators: [String: DocumentStore.SidecarCollaborator] = [:]
 }
 
 @MainActor
@@ -252,6 +256,7 @@ final class DocumentStore: ObservableObject {
             self.rawText = text
             self.lastSyncedText = text
             self.annotations = []
+            self.collaborators = [:]
             self.loadSidecar()
 
             // Capture the sidecar-loaded annotations into the tab snapshot.
@@ -368,6 +373,7 @@ final class DocumentStore: ObservableObject {
         rawText = placeholder
         lastSyncedText = placeholder
         annotations = []
+        collaborators = [:]
         closeSearch()
         focusedAnnotation = nil
         editingAnnotationID = nil
@@ -471,6 +477,7 @@ final class DocumentStore: ObservableObject {
         tabs[i].rawText = rawText
         tabs[i].annotations = annotations
         tabs[i].lastSyncedText = lastSyncedText
+        tabs[i].collaborators = collaborators
     }
 
     private func loadTabState(_ tab: DocumentTab) {
@@ -478,6 +485,7 @@ final class DocumentStore: ObservableObject {
         rawText = tab.rawText
         lastSyncedText = tab.lastSyncedText
         annotations = tab.annotations
+        collaborators = tab.collaborators
         closeSearch()
         focusedAnnotation = nil
         editingAnnotationID = nil
