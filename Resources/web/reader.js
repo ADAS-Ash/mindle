@@ -1175,6 +1175,9 @@
       mark.className = "mindle-hl";
       mark.dataset.annId = ann.id;
       mark.classList.toggle("has-note", !!(ann.note && ann.note.length));
+      if (ann.color) {
+        mark.style.setProperty('--collab-color', ann.color);
+      }
       mark.textContent = highlighted;
 
       if (after) {

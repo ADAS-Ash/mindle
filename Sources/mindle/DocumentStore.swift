@@ -36,6 +36,17 @@ struct Annotation: Identifiable, Codable, Equatable {
     /// no replies so existing sidecars round-trip without growth and
     /// the JSON stays minimal for the common case.
     var thread: [AnnotationMessage]?
+
+    // Collab extensions (all optional for backward compat with existing sidecars)
+    var status: AnnotationStatus?    // nil treated as .open
+    var assignee: String?            // collaborator alias
+    var labels: [String]?            // e.g. ["question", "blocker"]
+    var resolvedBy: String?
+    var resolvedAt: Date?
+}
+
+enum AnnotationStatus: String, Codable {
+    case open, resolved, wontfix
 }
 
 struct FileNode: Identifiable, Equatable {
@@ -67,6 +78,8 @@ final class DocumentStore: ObservableObject {
     @Published var fileURL: URL?
     @Published var rawText: String = ""
     @Published var annotations: [Annotation] = []
+    /// Collaborator registry loaded from sidecar — maps alias to display info.
+    @Published var collaborators: [String: SidecarCollaborator] = [:]
     /// Baseline for diff-on-reload. When `lastSyncedText != rawText`, the
     /// reader view shows track-changes between the two. Accepting clears
     /// the diff (lastSyncedText := rawText); rejecting reverts the
@@ -525,13 +538,20 @@ final class DocumentStore: ObservableObject {
 
     /// Bump the request signal — WebReaderView observes this, fetches the
     /// live selection from JS, and calls applyHighlight with fresh values.
-    func requestHighlight() { highlightRequestedAt = Date() }
-    func requestNote() { noteRequestedAt = Date() }
+    func requestHighlight() {
+        DebugConsole.shared.log("HIGHLIGHT requested")
+        highlightRequestedAt = Date()
+    }
+    func requestNote() {
+        DebugConsole.shared.log("NOTE requested")
+        noteRequestedAt = Date()
+    }
 
     /// Called by WebReaderView once the JS round-trip returns the live
     /// selection. Overwrites the cached selection with the fresh capture,
     /// then runs the standard highlight/note path.
     func applyHighlight(text: String, prefix: String, suffix: String) {
+        DebugConsole.shared.log("HIGHLIGHT: '\(text.prefix(30))'")
         selectionText = text
         selectionPrefix = prefix
         selectionSuffix = suffix
@@ -539,6 +559,7 @@ final class DocumentStore: ObservableObject {
     }
 
     func applyNote(text: String, prefix: String, suffix: String) {
+        DebugConsole.shared.log("NOTE: '\(text.prefix(30))'")
         selectionText = text
         selectionPrefix = prefix
         selectionSuffix = suffix
@@ -568,7 +589,8 @@ final class DocumentStore: ObservableObject {
                 text: selectionText,
                 prefix: selectionPrefix,
                 suffix: selectionSuffix,
-                note: ""
+                note: "",
+                author: IdentityManager.shared.alias
             )
             annotations.append(ann)
             if let url = fileURL {
@@ -597,7 +619,8 @@ final class DocumentStore: ObservableObject {
                 text: selectionText,
                 prefix: selectionPrefix,
                 suffix: selectionSuffix,
-                note: ""
+                note: "",
+                author: IdentityManager.shared.alias
             )
             annotations.append(ann)
             // Defer the `created` event until the user finishes typing
@@ -687,6 +710,7 @@ final class DocumentStore: ObservableObject {
         text: String,
         clientID: String? = nil
     ) -> Bool {
+        DebugConsole.shared.log("REPLY: to \(annotationID.uuidString.prefix(8)) by \(author)")
         let message = AnnotationMessage(author: author, text: text)
         if let active = activeTabID,
            let i = tabs.firstIndex(where: { $0.id == active }),
@@ -936,6 +960,15 @@ final class DocumentStore: ObservableObject {
         /// it left off. Nil when there's no in-flight diff (the common
         /// case), so existing v1.5 sidecars decode cleanly.
         var lastSyncedText: String?
+        /// Collaborator registry — maps alias to display info. Optional
+        /// so existing sidecars without collab decode cleanly.
+        var collaborators: [String: SidecarCollaborator]?
+    }
+
+    struct SidecarCollaborator: Codable, Equatable {
+        var displayName: String
+        var color: String
+        var type: String?  // "human" or "agent"
     }
 
     private func loadSidecar() {
@@ -945,6 +978,8 @@ final class DocumentStore: ObservableObject {
         decoder.dateDecodingStrategy = .iso8601
         if let decoded = try? decoder.decode(Sidecar.self, from: data) {
             annotations = decoded.annotations
+            collaborators = decoded.collaborators ?? [:]
+            DebugConsole.shared.log("LOAD: \(annotations.count) annotations, \(collaborators.count) collaborators")
             if let t = decoded.theme { theme = t }
             if let s = decoded.fontScale { fontScale = s }
             if let baseline = decoded.lastSyncedText {
@@ -955,6 +990,7 @@ final class DocumentStore: ObservableObject {
 
     func saveSidecar() {
         guard let url = sidecarURL else { return }
+        DebugConsole.shared.log("SAVE: \(annotations.count) annotations")
         let baseline = (lastSyncedText != rawText) ? lastSyncedText : nil
         writeSidecar(to: url, annotations: annotations, lastSynced: baseline)
     }
@@ -978,17 +1014,68 @@ final class DocumentStore: ObservableObject {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
+        // Register current user in collaborators
+        var collabs = collaborators
+        let im = IdentityManager.shared
+        if im.isConfigured {
+            collabs[im.alias] = im.asSidecarCollaborator()
+        }
         let sidecar = Sidecar(
             annotations: annotations,
             theme: theme,
             fontScale: fontScale,
-            lastSyncedText: lastSynced
+            lastSyncedText: lastSynced,
+            collaborators: collabs.isEmpty ? nil : collabs
         )
         if let data = try? encoder.encode(sidecar) {
             try? data.write(to: url, options: .atomic)
         }
     }
 
+    // MARK: - Collab Actions
+
+    func resolveAnnotation(id: UUID, by user: String? = nil) {
+        guard let idx = annotations.firstIndex(where: { $0.id == id }) else { return }
+        annotations[idx].status = .resolved
+        annotations[idx].resolvedBy = user ?? IdentityManager.shared.alias
+        annotations[idx].resolvedAt = Date()
+        DebugConsole.shared.log("Resolved annotation \(id.uuidString.prefix(8)) by \(annotations[idx].resolvedBy ?? "?")")
+        saveSidecar()
+    }
+
+    func reopenAnnotation(id: UUID) {
+        guard let idx = annotations.firstIndex(where: { $0.id == id }) else { return }
+        annotations[idx].status = .open
+        annotations[idx].resolvedBy = nil
+        annotations[idx].resolvedAt = nil
+        saveSidecar()
+    }
+
+    func assignAnnotation(id: UUID, to assignee: String) {
+        guard let idx = annotations.firstIndex(where: { $0.id == id }) else { return }
+        annotations[idx].assignee = assignee
+        DebugConsole.shared.log("Assigned \(id.uuidString.prefix(8)) → \(assignee)")
+        saveSidecar()
+    }
+
+    func addLabel(to id: UUID, label: String) {
+        guard let idx = annotations.firstIndex(where: { $0.id == id }) else { return }
+        var existing = annotations[idx].labels ?? []
+        if !existing.contains(label) {
+            existing.append(label)
+            annotations[idx].labels = existing
+            DebugConsole.shared.log("Label +\(label) on \(id.uuidString.prefix(8))")
+            saveSidecar()
+        }
+    }
+
+    func removeLabel(from id: UUID, label: String) {
+        guard let idx = annotations.firstIndex(where: { $0.id == id }) else { return }
+        annotations[idx].labels?.removeAll { $0 == label }
+        saveSidecar()
+    }
+
+    /// Ensures the current user is in the sidecar's collaborators registry.
     // MARK: - Export
 
     enum ExportFormat { case markdown, json }

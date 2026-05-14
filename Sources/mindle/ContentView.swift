@@ -304,6 +304,8 @@ struct SearchBar: View {
 
 struct AnnotationsSidebar: View {
     @EnvironmentObject var store: DocumentStore
+    @ObservedObject private var identity = IdentityManager.shared
+    @State private var showingIdentityAlert = false
 
     var body: some View {
         let c = store.theme.colors
@@ -315,6 +317,15 @@ struct AnnotationsSidebar: View {
                     .font(.system(size: 13, weight: .semibold, design: .serif))
                     .foregroundStyle(c.text)
                 Spacer()
+
+                Button { store.requestNote() } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(c.accent)
+                }
+                .buttonStyle(.plain)
+                .help("Add comment on selection (⌘⇧N)")
+
                 Text("\(store.annotations.count)")
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(c.muted)
@@ -326,6 +337,24 @@ struct AnnotationsSidebar: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
+
+            // Identity badge
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(Color(hex: identity.color))
+                    .frame(width: 7, height: 7)
+                Text(identity.isConfigured ? identity.alias : "anonymous")
+                    .font(.system(size: 10))
+                    .foregroundStyle(c.muted)
+                Spacer()
+                Text("click to change")
+                    .font(.system(size: 9))
+                    .foregroundStyle(c.muted.opacity(0.5))
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 6)
+            .contentShape(Rectangle())
+            .onTapGesture { showIdentityAlert() }
 
             Rectangle().fill(c.rule.opacity(0.4)).frame(height: 0.5)
 
@@ -391,6 +420,30 @@ struct AnnotationsSidebar: View {
             }
         }
         .background(c.sidebar)
+    }
+
+    private func showIdentityAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Set Identity"
+        alert.informativeText = "Your alias for annotations (min 2 chars)"
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 200, height: 24))
+        input.stringValue = IdentityManager.shared.alias
+        input.placeholderString = "e.g. ash"
+        alert.accessoryView = input
+        alert.window.initialFirstResponder = input
+        if alert.runModal() == .alertFirstButtonReturn {
+            let alias = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if alias.count >= 2 {
+                IdentityManager.shared.save(alias: alias, displayName: alias, color: IdentityManager.shared.color)
+            } else {
+                let feedback = NSAlert()
+                feedback.messageText = "Invalid Alias"
+                feedback.informativeText = "Alias must be at least 2 characters."
+                feedback.runModal()
+            }
+        }
     }
 }
 
@@ -463,6 +516,77 @@ struct AnnotationCard: View {
                         .fill(dotColor.opacity(0.9))
                         .frame(width: 2)
                 }
+
+            // Collab: status + assign + labels (show when collab is active)
+            if annotation.status != nil || annotation.assignee != nil || annotation.labels != nil || !store.collaborators.isEmpty {
+                HStack(spacing: 6) {
+                    let status = annotation.status ?? .open
+                    Text(status.rawValue)
+                    .font(.system(size: 9, weight: .semibold))
+                    .textCase(.uppercase)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(status == .resolved ? Color.green.opacity(0.2) : Color.blue.opacity(0.15))
+                    .foregroundStyle(status == .resolved ? .green : c.accent)
+                    .clipShape(Capsule())
+
+                // Resolve/Reopen
+                Button(status == .resolved ? "Reopen" : "Resolve") {
+                    if status == .resolved {
+                        store.reopenAnnotation(id: annotation.id)
+                    } else {
+                        store.resolveAnnotation(id: annotation.id)
+                    }
+                }
+                .font(.system(size: 10))
+                .buttonStyle(.plain)
+                .foregroundStyle(c.muted)
+
+                Spacer()
+
+                // Assign
+                Menu {
+                    ForEach(Array(store.collaborators.keys.sorted()), id: \.self) { alias in
+                        Button(alias) { store.assignAnnotation(id: annotation.id, to: alias) }
+                    }
+                } label: {
+                    Text(annotation.assignee ?? "Assign")
+                        .font(.system(size: 10))
+                        .foregroundStyle(annotation.assignee != nil ? c.accent : c.muted)
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+
+                // Labels
+                Menu {
+                    ForEach(["question", "blocker", "nit", "todo", "suggestion"], id: \.self) { label in
+                        Button(label) { store.addLabel(to: annotation.id, label: label) }
+                    }
+                } label: {
+                    Image(systemName: "tag")
+                        .font(.system(size: 10))
+                        .foregroundStyle(c.muted)
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+            }
+            .padding(.top, 2)
+
+            // Labels display
+            if let labels = annotation.labels, !labels.isEmpty {
+                HStack(spacing: 4) {
+                    ForEach(labels, id: \.self) { label in
+                        Text(label)
+                            .font(.system(size: 9))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(c.muted.opacity(0.15))
+                            .clipShape(Capsule())
+                            .foregroundStyle(c.muted)
+                    }
+                }
+            }
+            } // end collab conditional
 
             if isEditing || !annotation.note.isEmpty {
                 TextEditor(text: $noteDraft)
@@ -675,7 +799,7 @@ struct AnnotationReplyBox: View {
         store.appendThreadMessage(
             forPath: url.path,
             annotationID: annotationID,
-            author: "user",
+            author: IdentityManager.shared.alias,
             text: trimmed
         )
         draft = ""
