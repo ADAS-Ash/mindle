@@ -779,11 +779,11 @@ struct AnnotationCard: View {
                 }
             }
 
-            // Collab: status + assign + labels
-            HStack(spacing: 6) {
-                // Status pill
-                let status = annotation.status ?? .open
-                Text(status.rawValue)
+            // Collab: status + assign + labels (show when collab is active)
+            if annotation.status != nil || annotation.assignee != nil || annotation.labels != nil || !store.collaborators.isEmpty {
+                HStack(spacing: 6) {
+                    let status = annotation.status ?? .open
+                    Text(status.rawValue)
                     .font(.system(size: 9, weight: .semibold))
                     .textCase(.uppercase)
                     .padding(.horizontal, 5)
@@ -848,6 +848,7 @@ struct AnnotationCard: View {
                     }
                 }
             }
+            } // end collab conditional
 
             if isEditing || !annotation.note.isEmpty {
                 TextEditor(text: $noteDraft)
