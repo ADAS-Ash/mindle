@@ -160,6 +160,14 @@ final class DocumentStore: ObservableObject {
     // FSEvents-based watcher on the active file. Replaced whenever the
     // active fileURL changes (open / tab activate / close).
     private var fileWatcher: FileWatcher?
+    // Sibling watcher on the active file's sidecar. Picks up external
+    // annotation edits — another Mindle instance writing through a
+    // shared folder, a git pull, a teammate's collab tool — and reloads
+    // them into the active tab.
+    private var sidecarWatcher: FileWatcher?
+    /// Timestamp of the most recent in-process `writeSidecar`. Used to
+    /// suppress the FSEvents echo that our own atomic write triggers.
+    private var lastSelfSidecarWriteAt: Date?
 
     var hasSelection: Bool { !selectionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
@@ -299,6 +307,8 @@ final class DocumentStore: ObservableObject {
     private func updateWatcher() {
         fileWatcher?.stop()
         fileWatcher = nil
+        sidecarWatcher?.stop()
+        sidecarWatcher = nil
         guard let url = fileURL else { return }
         // FSEvents only meaningfully watches local files. Remote URL tabs
         // don't get a watcher — refreshing means re-opening from the menu.
@@ -306,6 +316,27 @@ final class DocumentStore: ObservableObject {
         fileWatcher = FileWatcher(url: url) { [weak self] in
             self?.reloadFromDisk()
         }
+        if let sidecar = sidecarURL, sidecar.isFileURL {
+            sidecarWatcher = FileWatcher(url: sidecar) { [weak self] in
+                self?.reloadSidecarFromDisk()
+            }
+        }
+    }
+
+    /// Sidecar-watcher callback. Suppresses the echo from our own
+    /// `writeSidecar` (FSEvents fires on every atomic save) by ignoring
+    /// events that arrive within 750ms of the last self-write; anything
+    /// past that is a genuine external change and gets pulled in via
+    /// `loadSidecar()`. Active-tab snapshot stays consistent with the
+    /// reloaded state.
+    private func reloadSidecarFromDisk() {
+        if let last = lastSelfSidecarWriteAt,
+           Date().timeIntervalSince(last) < 0.75 {
+            return
+        }
+        DebugConsole.shared.log("SIDECAR: external change, reloading")
+        loadSidecar()
+        snapshotActiveTab()
     }
 
     // MARK: - Open URL
@@ -1062,6 +1093,10 @@ final class DocumentStore: ObservableObject {
             collaborators: collabs.isEmpty ? nil : collabs
         )
         if let data = try? encoder.encode(sidecar) {
+            // Stamp *before* the write so the FSEvents echo (which can
+            // arrive almost synchronously) lands inside the suppression
+            // window in reloadSidecarFromDisk.
+            lastSelfSidecarWriteAt = Date()
             try? data.write(to: url, options: .atomic)
         }
     }
