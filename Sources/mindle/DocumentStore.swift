@@ -198,6 +198,14 @@ final class DocumentStore: ObservableObject {
             return Self.urlSidecarsDir()?
                 .appendingPathComponent("\(Self.urlKey(for: u)).mindle.json")
         }
+        // Clipboard documents — content-addressed; the URL is
+        // `clipboard:///<contentHash>` and the hash *is* the sidecar key,
+        // so re-pasting identical text re-attaches to the prior annotations.
+        if u.scheme == "clipboard" {
+            let hash = u.lastPathComponent
+            return Self.clipboardSidecarsDir()?
+                .appendingPathComponent("\(hash).mindle.json")
+        }
         return u.deletingLastPathComponent()
             .appendingPathComponent(".\(u.lastPathComponent).mindle.json")
     }
@@ -216,6 +224,35 @@ final class DocumentStore: ObservableObject {
             at: dir, withIntermediateDirectories: true
         )
         return dir
+    }
+
+    /// ~/Library/Application Support/Mindle/clipboard-sidecars/. Sibling of
+    /// `urlSidecarsDir`. Sidecar filename is the content hash, so identical
+    /// pastes round-trip to the same annotations.
+    private static func clipboardSidecarsDir() -> URL? {
+        guard let support = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first else { return nil }
+        let dir = support
+            .appendingPathComponent("Mindle", isDirectory: true)
+            .appendingPathComponent("clipboard-sidecars", isDirectory: true)
+        try? FileManager.default.createDirectory(
+            at: dir, withIntermediateDirectories: true
+        )
+        return dir
+    }
+
+    /// FNV-1a 64-bit hash of an arbitrary UTF-8 string. Used for content
+    /// hashing of pasted clipboard text — stable across launches, fits in
+    /// a filename, collision-resistant for human-scale paste volumes.
+    private static func contentHash(_ text: String) -> String {
+        var h: UInt64 = 14695981039346656037
+        for byte in text.utf8 {
+            h ^= UInt64(byte)
+            h = h &* 1099511628211
+        }
+        return String(format: "%016llx", h)
     }
 
     /// FNV-1a 64-bit hash of the URL's absolute string. Stable across launches,
@@ -438,6 +475,62 @@ final class DocumentStore: ObservableObject {
             }
         }
         task.resume()
+    }
+
+    // MARK: - Open from Clipboard
+
+    /// Open the current pasteboard contents as a Markdown document.
+    /// Tab identity is a content-addressed pseudo-URL
+    /// `clipboard:///<contentHash>` so re-pasting identical text re-opens
+    /// the same tab and re-attaches to the prior annotations. Sidesteps
+    /// auth entirely — Chrome (or wherever the user copied from) owns the
+    /// session; Mindle just carries the rendered bytes across.
+    func openFromClipboard() {
+        let pb = NSPasteboard.general
+        guard let raw = pb.string(forType: .string) else {
+            NSSound.beep()
+            return
+        }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            NSSound.beep()
+            return
+        }
+        let hash = Self.contentHash(raw)
+        guard let url = URL(string: "clipboard:///\(hash)") else {
+            NSSound.beep()
+            return
+        }
+        // Same identical text already open in this window? Activate it
+        // instead of stacking a duplicate tab.
+        if let existing = tabs.first(where: { $0.fileURL == url }) {
+            activate(tabID: existing.id)
+            return
+        }
+        snapshotActiveTab()
+        let newTab = DocumentTab(
+            id: UUID(),
+            fileURL: url,
+            rawText: raw,
+            annotations: [],
+            lastSyncedText: raw
+        )
+        tabs.append(newTab)
+        activeTabID = newTab.id
+        fileURL = url
+        rawText = raw
+        lastSyncedText = raw
+        annotations = []
+        collaborators = [:]
+        closeSearch()
+        focusedAnnotation = nil
+        editingAnnotationID = nil
+        updateSelection(text: "", prefix: "", suffix: "")
+        // No body watcher (no file to watch); sidecar watcher is wired up
+        // inside updateWatcher when the sidecar URL resolves to a file.
+        updateWatcher()
+        loadSidecar()
+        snapshotActiveTab()
     }
 
     @MainActor
@@ -1075,6 +1168,9 @@ final class DocumentStore: ObservableObject {
         if scheme == "http" || scheme == "https" {
             url = Self.urlSidecarsDir()?
                 .appendingPathComponent("\(Self.urlKey(for: tab.fileURL)).mindle.json")
+        } else if scheme == "clipboard" {
+            url = Self.clipboardSidecarsDir()?
+                .appendingPathComponent("\(tab.fileURL.lastPathComponent).mindle.json")
         } else {
             url = tab.fileURL.deletingLastPathComponent()
                 .appendingPathComponent(".\(tab.fileURL.lastPathComponent).mindle.json")

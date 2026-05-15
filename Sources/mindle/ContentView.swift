@@ -61,7 +61,7 @@ struct ContentView: View {
             }
 
             ToolbarItem(placement: .principal) {
-                Text(store.fileURL?.lastPathComponent ?? "Mindle")
+                Text(store.fileURL.map { displayTitle(for: $0) } ?? "Mindle")
                     .font(.system(size: 13, weight: .medium, design: .serif))
                     .foregroundStyle(c.muted)
                     .lineLimit(1)
@@ -489,6 +489,17 @@ private func threadAuthorLabel(_ author: String, store: DocumentStore) -> String
     if author == "agent" { return "Agent" }
     let name = store.collaborators[author]?.displayName ?? author
     return name.count > 8 ? String(name.prefix(8)) + "…" : name
+}
+
+/// Display title for an open document. Files use their filename; remote
+/// URLs use the last path component; clipboard pseudo-URLs use a
+/// "Clipboard · <hash-prefix>" label so the tab strip stays readable.
+func displayTitle(for url: URL) -> String {
+    if url.scheme == "clipboard" {
+        let hash = url.lastPathComponent
+        return "Clipboard · \(hash.prefix(8))"
+    }
+    return url.lastPathComponent
 }
 
 /// Known reaction kinds for the rc1 vocabulary. The codec is open-ended
@@ -1222,7 +1233,7 @@ struct TabBarItem: View {
                     Image(systemName: "doc.text")
                         .font(.system(size: 10))
                         .foregroundStyle(isActive ? c.accent : c.muted)
-                    Text(tab.fileURL.lastPathComponent)
+                    Text(displayTitle(for: tab.fileURL))
                         .font(.system(size: 12, design: .serif))
                         .foregroundStyle(isActive ? c.text : c.muted)
                         .lineLimit(1)

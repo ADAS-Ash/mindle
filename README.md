@@ -68,6 +68,7 @@ Requires **macOS 14+** and **Xcode Command Line Tools** (`xcode-select --install
 ### Workflow
 - **Tabs and multi-window** — open many files in one window (`⌘O` adds a tab) or pop a new window with `⌘N`. Each tab carries its own scroll, theme, font scale, and collaborator registry. `⌘W` closes the active tab when more than one is open, otherwise the window.
 - **Open remote URLs** — `⌘⇧L` opens any `http(s)` URL pointing at raw Markdown (a GitHub raw link, a hosted doc) as a tab. Annotations on URL documents persist locally keyed by URL hash, so re-opening the same URL brings the annotations back.
+- **Open from Clipboard** — `⌘⇧V` opens the pasteboard contents as a Markdown tab. Use this when the source is behind a login your browser already handles (internal GitLab raw, Confluence, anything auth-walled): copy the raw Markdown there, paste it here. Tabs are content-addressed, so re-pasting identical text re-opens the same tab with its prior annotations.
 - **File browser** — scoped sidebar tree of every `.md` and `.txt` in the current folder (`⌘⇧F`). Never escapes upward.
 - **Find in document** — live search with match count, `⌘F` / `⌘G` / `⌘⇧G`.
 - **Live reload** — external edits (vim, an agent, Dropbox, anything) re-render automatically. Bursty writes are debounced; scroll position is preserved. Sidecar changes (a teammate's annotation arriving via shared folder or `git pull`) flow in the same way.
@@ -115,6 +116,7 @@ See [Agent Collaboration](#agent-collaboration) below for setup.
 | `⌘F` | Find in document |
 | `⌘G` / `⌘⇧G` | Next / previous match |
 | `⌘⇧L` | Open URL… (fetch a raw-Markdown URL as a tab) |
+| `⌘⇧V` | Open from Clipboard (pasteboard contents as a Markdown tab) |
 | `⌘P` | Export as PDF |
 | `⌘⇧E` | Export annotations (Markdown or JSON) |
 | `⌘⇧H` | Highlight selection |

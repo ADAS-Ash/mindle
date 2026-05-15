@@ -55,6 +55,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for ref in registeredStores {
             guard let store = ref.store else { continue }
             for tab in store.tabs {
+                // MCP path lookups need a real filesystem path to round-trip
+                // through. http(s) and clipboard tabs are content-addressed
+                // pseudo-URLs that no agent could refer back to with
+                // get_annotations, so they're omitted here.
+                guard tab.fileURL.isFileURL else { continue }
                 let p = tab.fileURL.canonicalPath
                 if seen.insert(p).inserted { ordered.append(p) }
             }
@@ -279,6 +284,9 @@ struct MindleCommands: Commands {
                 .disabled(store == nil)
             Button("Open URL…") { store?.openURLWithPrompt() }
                 .keyboardShortcut("l", modifiers: [.command, .shift])
+                .disabled(store == nil)
+            Button("Open from Clipboard") { store?.openFromClipboard() }
+                .keyboardShortcut("v", modifiers: [.command, .shift])
                 .disabled(store == nil)
             Divider()
             Button("Export Annotations…") { store?.exportAnnotationsWithPanel() }
