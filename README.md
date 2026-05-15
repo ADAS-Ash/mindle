@@ -193,10 +193,16 @@ The big-picture plan lives in [`docs/v2-roadmap.md`](docs/v2-roadmap.md). Where 
 
 **Next**
 
-- **v2.2 — Bring-your-own sync (S3 first).** A `SyncProvider` protocol with an S3 backend for teams whose markdown lives in a bucket. ETag-based optimistic concurrency, conflicts surfaced through the same diff-on-reload UX.
+- **v2.2 — Collaboration polish.** Incremental refinements on the v2.1 surface as real-use feedback comes in. First addition: 👍 / ❤️ / 😄 reactions on annotations and thread replies, so a quick "got it" / "agreed" doesn't need its own reply.
+
+**v3 — Two paths**
+
+- **PDF as a content surface.** Open arxiv papers and other PDFs in Mindle alongside Markdown. Same annotation primitive, same sidecar (`.paper.pdf.mindle.json`), same agent loop, same team-collab story — built on PDFKit. The researcher's natural place for "read this paper, redline it, talk to the agent about it."
+- **Edit-as-annotation.** A new annotation kind that proposes a text replacement instead of a comment. Accept writes through to the file; reject discards. Composes with everything: agents propose edits the same way they leave comments, teammates' suggested edits arrive as track-changes cards via the sidecar watcher, Mindle stays reader-first while the WYSIWYG-edit ask gets answered as reviewing-with-receipts.
 
 **Eventually**
 
+- **Bring-your-own sync (S3 first).** A `SyncProvider` protocol with an S3 backend for teams whose markdown lives in a bucket. ETag-based optimistic concurrency, conflicts surfaced through the same diff-on-reload UX. Tentative; shared-folder sync may be enough for most teams.
 - **Homebrew cask** — `brew install --cask mindle` for one-line install.
 - **iOS / iPadOS port** — multiplatform build sharing the same WebKit reader and annotation engine.
 
