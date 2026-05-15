@@ -15,7 +15,8 @@
   <a href="#agent-collaboration">Agents</a> &bull;
   <a href="#keyboard-shortcuts">Shortcuts</a> &bull;
   <a href="#build-from-source">Build</a> &bull;
-  <a href="#roadmap">Roadmap</a>
+  <a href="#roadmap">Roadmap</a> &bull;
+  <a href="#contributors">Contributors</a>
 </p>
 
 <p align="center">
@@ -31,6 +32,8 @@
 **Mindle** is a native macOS Markdown reader built for focused, distraction-free reading. Think of it as a personal e-reader for your `.md` files — serif typography, warm themes, and the ability to highlight and annotate passages without ever leaving the document.
 
 Since v2.0, Mindle also speaks MCP. When you're collaborating with an AI agent on a document, your annotations become a back-and-forth channel anchored to the passage — you mark up, the agent picks up the event, addresses it, replies inline in the thread. The conversation lives in the file, not in a chat window.
+
+As of v2.1, that conversation can include teammates too. Annotations carry author identity, status (open / resolved / wontfix), assignee, labels, and a threaded reply trail. Any teammate with the same `.md` + `.mindle.json` pair on a shared drive (iCloud / Dropbox / git) becomes a co-author — Mindle just makes you see them. No accounts, no backend.
 
 No Electron. No subscriptions. No telemetry. The auto-update check is the only network call, and it's opt-in.
 
@@ -63,20 +66,31 @@ Requires **macOS 14+** and **Xcode Command Line Tools** (`xcode-select --install
 - **Typography controls** — scale the serif reading font with `⌘+` / `⌘-`.
 
 ### Workflow
-- **Tabs and multi-window** — open many files in one window (`⌘O` adds a tab) or pop a new window with `⌘N`. `⌘W` closes the active tab when more than one is open, otherwise the window.
+- **Tabs and multi-window** — open many files in one window (`⌘O` adds a tab) or pop a new window with `⌘N`. Each tab carries its own scroll, theme, font scale, and collaborator registry. `⌘W` closes the active tab when more than one is open, otherwise the window.
+- **Open remote URLs** — `⌘⇧L` opens any `http(s)` URL pointing at raw Markdown (a GitHub raw link, a hosted doc) as a tab. Annotations on URL documents persist locally keyed by URL hash, so re-opening the same URL brings the annotations back.
 - **File browser** — scoped sidebar tree of every `.md` and `.txt` in the current folder (`⌘⇧F`). Never escapes upward.
 - **Find in document** — live search with match count, `⌘F` / `⌘G` / `⌘⇧G`.
-- **Live reload** — external edits (vim, an agent, Dropbox, anything) re-render automatically. Bursty writes are debounced; scroll position is preserved.
-- **Diff-on-reload** — when an external write changes the active file, Mindle renders the change as a Word-style track-changes overlay you can ✓ Keep or ✗ Revert per chunk, or whole-document with `⌘⌥⏎` / `⌘⌥⌫`.
+- **Live reload** — external edits (vim, an agent, Dropbox, anything) re-render automatically. Bursty writes are debounced; scroll position is preserved. Sidecar changes (a teammate's annotation arriving via shared folder or `git pull`) flow in the same way.
+- **Diff-on-reload** — when an external write changes the active file, Mindle renders the change as a Word-style track-changes overlay you can ✓ Keep or ✗ Revert per chunk, or whole-document with `⌘⌥⏎` / `⌘⌥⌫`. Diffs run a second pass at word granularity inside each line, so you see just the changed words struck or underlined — not the whole line.
+- **Collapsible YAML frontmatter** — `---`-delimited blocks at the top of a file collapse behind a small chevron; click to inspect. PDF export force-opens them.
 - **PDF export** — `⌘P` produces a paginated Letter-sized PDF with print-styled typography.
-- **Auto-update** — opt-in, off by default. EdDSA-verified binaries via [Sparkle](https://sparkle-project.org).
+- **Auto-update** — opt-in, off by default. EdDSA-verified binaries via [Sparkle](https://sparkle-project.org). Pre-releases ship on a separate `beta` channel; flip **Mindle → Include Pre-release Updates** to opt in.
 
 ### Annotation
-- **Highlight & note** — select any passage, press `⌘⇧H` to highlight or `⌘⇧N` to attach a note. Works across paragraphs, headings, lists, and code blocks.
+- **Highlight & note** — select any passage, press `⌘⇧H` to highlight or `⌘⇧N` to attach a note, or `⌘⇧K` to add a comment to the current selection. Works across paragraphs, headings, lists, and code blocks.
 - **Annotations sidebar** — toggle with `⌘⇧A`. Click any annotation to jump to its passage; notes are editable inline. The new card auto-scrolls into view.
-- **Threads** — each annotation carries a conversation. You and the agent can reply back and forth in a single-column transcript with author-keyed left stripes (gray for the agent, accent for you). Return commits a reply; Shift+Return inserts a newline.
-- **Persistent locally** — saved to a hidden `.yourfile.md.mindle.json` sidecar. Nothing leaves your machine.
+- **Identity-colored highlights** — set your alias once (click the badge at the top of the sidebar) and your highlights tint with your registered color in the reader pane. A teammate's highlights tint with theirs. CSS `color-mix` against the current theme keeps every tint legible against light, sepia, and dark.
+- **Status, assignment, labels** — every card carries a status pill (**OPEN / RESOLVED / WONTFIX**) with one-click Resolve/Reopen, an Assign dropdown for handing it to a collaborator, and label chips (`question` / `blocker` / `nit` / `todo` / `suggestion`).
+- **Threads** — each annotation carries a conversation. You, your teammates, and the agent can reply back and forth in a single-column transcript with per-author color stripes and aliases. Return commits a reply; Shift+Return inserts a newline.
+- **Persistent locally** — saved to a hidden `.yourfile.md.mindle.json` sidecar alongside the document. Nothing leaves your machine; sync is whatever you point the folder at (iCloud, Dropbox, git…).
 - **Export** — `⌘⇧E` exports highlights and notes as Markdown or JSON.
+
+### Team collaboration (new in v2.1)
+- **Sync is your folder.** The `.md` + `.mindle.json` pair lives wherever you keep your notes. Drop the file into iCloud / OneDrive / Dropbox / a git repo — anyone with a copy is a co-author. No accounts, no backend, no servers.
+- **Author identity.** A small badge at the top of the sidebar lets you set your alias and a color. Every save auto-registers you in the document's collaborator registry; the next person to open the file sees your annotations stamped with your name.
+- **Live sidecar updates.** When a teammate pushes a change to the shared folder (or you `git pull` it), Mindle's sidecar watcher pulls it in without close-and-reopen. New annotations and replies appear inline as they arrive.
+- **Per-document registries.** Each open tab carries its own collaborator state — colors and aliases never bleed across documents in the same window.
+- **Status + assignment + labels** are the shared triage surface for the team — see the **Annotation** section above.
 
 ### Agent collaboration (new in v2.0)
 - **Read-side parity** — an agent can list every file you have open in Mindle and read your annotations on each. Selection text and surrounding context arrive verbatim, so the agent knows exactly what you're pointing at.
@@ -100,12 +114,15 @@ See [Agent Collaboration](#agent-collaboration) below for setup.
 | `⌘W` | Close active tab (or window, when only one tab is open) |
 | `⌘F` | Find in document |
 | `⌘G` / `⌘⇧G` | Next / previous match |
+| `⌘⇧L` | Open URL… (fetch a raw-Markdown URL as a tab) |
 | `⌘P` | Export as PDF |
 | `⌘⇧E` | Export annotations (Markdown or JSON) |
 | `⌘⇧H` | Highlight selection |
 | `⌘⇧N` | Add note to selection |
+| `⌘⇧K` | Add comment to selection |
 | `⌘⇧A` | Toggle annotations sidebar |
 | `⌘⇧F` | Toggle files sidebar |
+| `⌘⇧D` | Toggle debug console (annotation lifecycle events) |
 | `⌘⇧T` | Cycle theme (light / sepia / dark) |
 | `⌘+` / `⌘-` | Increase / decrease font size |
 | `⌘⌥⏎` | Keep all in-flight changes |
@@ -137,9 +154,12 @@ Any MCP-aware client works the same way — the tool descriptions carry enough p
 |------|-----------|--------------|
 | `list_open_files` | read | Every file open in any Mindle window |
 | `get_annotations(path)` | read | Annotations + threads on a file |
+| `get_collaborators(path)` | read | Identity registry for a document |
 | `comment_on_annotation(path, id, text)` | write | Append an agent message to a thread |
 | `create_annotation(path, text, prefix, suffix, note)` | write | Open an agent-authored annotation on a passage |
 | `clear_annotation(path, id, summary)` | write | Mark an annotation done with a summary |
+| `resolve_annotation(path, id, author?)` | write | Move an annotation to **resolved** |
+| `assign_annotation(path, id, assignee)` | write | Hand an annotation to a collaborator |
 | `wait_for_annotation_event(timeout_seconds, since_event_id)` | read | Long-poll for the next user event (created / thread reply / deleted) |
 
 The server is read-only as far as the file system is concerned — file IO stays in the agent's own tools. Mindle exposes only the annotation channel.
@@ -169,16 +189,20 @@ The big-picture plan lives in [`docs/v2-roadmap.md`](docs/v2-roadmap.md). Where 
 **Shipped**
 
 - ✅ **v2.0 — MCP collaboration loop.** Mindle is the review surface for agent-driven markdown work. The agent writes, you mark up; the agent reads your annotations and threads back, replies inline, or addresses them by editing the file. See [Agent Collaboration](#agent-collaboration).
+- ✅ **v2.1 — Multi-user collaboration.** Identity, author-stamped annotations, status / assignment / labels, threaded replies with per-author colors, and a sidecar watcher so a teammate's edits land in the open document live. A colleague editing your file in iCloud / OneDrive / Dropbox / git is architecturally indistinguishable from an agent — Mindle just makes you see them. No new sync code; the shared folder is the transport.
 
 **Next**
 
-- **v2.1 — Multi-user collaboration foundation.** Identity, author-stamped annotations, diff-banner attribution, and cloud-drive folder detection. A colleague editing your file in iCloud / OneDrive / Dropbox becomes architecturally indistinguishable from an agent — Mindle just makes you see them. No new sync code; the cloud drive is the transport.
 - **v2.2 — Bring-your-own sync (S3 first).** A `SyncProvider` protocol with an S3 backend for teams whose markdown lives in a bucket. ETag-based optimistic concurrency, conflicts surfaced through the same diff-on-reload UX.
 
 **Eventually**
 
 - **Homebrew cask** — `brew install --cask mindle` for one-line install.
 - **iOS / iPadOS port** — multiplatform build sharing the same WebKit reader and annotation engine.
+
+## Contributors
+
+A huge thank-you to [**@ADAS-Ash**](https://github.com/ADAS-Ash) for landing the foundation of v2.1's team-collaboration feature ([PR #17](https://github.com/nonatofabio/mindle/pull/17)) — the annotation data model extensions (status, assignee, labels), `IdentityManager`, the collaborator registry, identity-colored highlights, the debug console, the `⌘⇧K` shortcut, and the `resolve` / `assign` / `get_collaborators` MCP tools. The polish on top (per-tab registries, sidecar watcher, sidebar author cues) all built directly on that work.
 
 ## License
 
