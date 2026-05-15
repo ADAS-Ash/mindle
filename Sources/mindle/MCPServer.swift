@@ -373,6 +373,19 @@ final class MCPServer {
         }
     }
 
+    private static func encodeReactions(
+        _ reactions: [AnnotationReaction],
+        iso: ISO8601DateFormatter
+    ) -> [[String: Any]] {
+        reactions.map { r in
+            [
+                "author": r.author,
+                "kind": r.kind,
+                "createdAt": iso.string(from: r.createdAt)
+            ]
+        }
+    }
+
     private static func encodeAnnotation(
         _ ann: Annotation,
         iso: ISO8601DateFormatter
@@ -386,14 +399,21 @@ final class MCPServer {
             "author": ann.author ?? "user",
             "createdAt": iso.string(from: ann.createdAt)
         ]
+        if let reactions = ann.reactions, !reactions.isEmpty {
+            payload["reactions"] = encodeReactions(reactions, iso: iso)
+        }
         if let thread = ann.thread, !thread.isEmpty {
             payload["thread"] = thread.map { msg -> [String: Any] in
-                [
+                var m: [String: Any] = [
                     "id": msg.id.uuidString,
                     "author": msg.author,
                     "text": msg.text,
                     "createdAt": iso.string(from: msg.createdAt)
                 ]
+                if let reactions = msg.reactions, !reactions.isEmpty {
+                    m["reactions"] = encodeReactions(reactions, iso: iso)
+                }
+                return m
             }
         }
         return payload

@@ -272,6 +272,9 @@ struct MindleMCP {
                     if !note.isEmpty {
                         lines.append("   Note: \(note)")
                     }
+                    if let reactions = ann["reactions"] as? [[String: Any]], !reactions.isEmpty {
+                        lines.append("   Reactions: \(formatReactions(reactions))")
+                    }
                     if let thread = ann["thread"] as? [[String: Any]], !thread.isEmpty {
                         lines.append("   Thread:")
                         for msg in thread {
@@ -285,7 +288,9 @@ struct MindleMCP {
                             let parts = mText.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
                             firstLine = parts.first ?? ""
                             restLines = Array(parts.dropFirst())
-                            lines.append("     - \(mAuthor): \(firstLine)")
+                            let mReactions = msg["reactions"] as? [[String: Any]] ?? []
+                            let reactionSuffix = mReactions.isEmpty ? "" : "  [\(formatReactions(mReactions))]"
+                            lines.append("     - \(mAuthor): \(firstLine)\(reactionSuffix)")
                             for r in restLines {
                                 lines.append("       \(r)")
                             }
@@ -396,6 +401,25 @@ struct MindleMCP {
             "content": [["type": "text", "text": text]],
             "isError": true
         ]
+    }
+
+    /// Compact one-line render of a reaction array: groups by kind, shows
+    /// count + reactor aliases. e.g. `+1 2 (alice, bob), heart 1 (charlie)`.
+    /// Stays plain ASCII so it round-trips through any agent context.
+    private static func formatReactions(_ reactions: [[String: Any]]) -> String {
+        // Preserve first-seen order per kind so the output is stable.
+        var order: [String] = []
+        var byKind: [String: [String]] = [:]
+        for r in reactions {
+            let kind = (r["kind"] as? String) ?? "?"
+            let author = (r["author"] as? String) ?? "?"
+            if byKind[kind] == nil { order.append(kind) }
+            byKind[kind, default: []].append(author)
+        }
+        return order.map { kind in
+            let authors = byKind[kind] ?? []
+            return "\(kind) \(authors.count) (\(authors.joined(separator: ", ")))"
+        }.joined(separator: ", ")
     }
 
     // MARK: - Socket bridge to running Mindle

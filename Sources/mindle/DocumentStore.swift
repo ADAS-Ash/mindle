@@ -19,6 +19,17 @@ enum ReaderTheme: String, CaseIterable, Codable {
     case light, sepia, dark
 }
 
+/// A reaction (👍 / ❤️ / 😄) on an annotation or a thread message. One
+/// (author, kind) pair per reactor per target — toggling re-applies or
+/// removes that pair. `kind` is intentionally a String so older builds
+/// decode unknown reaction kinds without erroring; renderers fall back
+/// to a generic glyph for anything outside the known vocabulary.
+struct AnnotationReaction: Codable, Equatable {
+    var author: String        // collaborator alias
+    var kind: String          // "+1" | "heart" | "laugh" (open-ended)
+    var createdAt: Date = Date()
+}
+
 /// A message in an annotation's thread. Threads are how the user and
 /// the agent have a back-and-forth about a passage — the agent can
 /// post progress notes or questions, the user can reply, all anchored
@@ -31,6 +42,9 @@ struct AnnotationMessage: Identifiable, Codable, Equatable {
     var author: String
     var text: String
     var createdAt: Date = Date()
+    /// Optional reactions on this message. Nil when none so older
+    /// sidecars round-trip clean and the JSON stays compact.
+    var reactions: [AnnotationReaction]?
 }
 
 struct Annotation: Identifiable, Codable, Equatable {
@@ -55,6 +69,9 @@ struct Annotation: Identifiable, Codable, Equatable {
     var labels: [String]?            // e.g. ["question", "blocker"]
     var resolvedBy: String?
     var resolvedAt: Date?
+    /// Optional reactions on the annotation as a whole. Replies have
+    /// their own reactions field on AnnotationMessage.
+    var reactions: [AnnotationReaction]?
 }
 
 enum AnnotationStatus: String, Codable {
@@ -1141,6 +1158,38 @@ final class DocumentStore: ObservableObject {
     func removeLabel(from id: UUID, label: String) {
         guard let idx = annotations.firstIndex(where: { $0.id == id }) else { return }
         annotations[idx].labels?.removeAll { $0 == label }
+        saveSidecar()
+    }
+
+    /// Toggle a reaction on an annotation (when `messageID` is nil) or
+    /// on a thread message. Same (author, kind) pair is removed if
+    /// present, otherwise appended. Author is the current user's alias
+    /// — falls back to "user" when identity isn't configured (matches
+    /// how `author` is stamped on pre-identity annotations).
+    func toggleReaction(annotationID: UUID, messageID: UUID? = nil, kind: String) {
+        guard let i = annotations.firstIndex(where: { $0.id == annotationID }) else { return }
+        let alias = IdentityManager.shared.isConfigured ? IdentityManager.shared.alias : "user"
+        if let messageID {
+            guard var thread = annotations[i].thread,
+                  let j = thread.firstIndex(where: { $0.id == messageID }) else { return }
+            var existing = thread[j].reactions ?? []
+            if let k = existing.firstIndex(where: { $0.author == alias && $0.kind == kind }) {
+                existing.remove(at: k)
+            } else {
+                existing.append(AnnotationReaction(author: alias, kind: kind))
+            }
+            thread[j].reactions = existing.isEmpty ? nil : existing
+            annotations[i].thread = thread
+        } else {
+            var existing = annotations[i].reactions ?? []
+            if let k = existing.firstIndex(where: { $0.author == alias && $0.kind == kind }) {
+                existing.remove(at: k)
+            } else {
+                existing.append(AnnotationReaction(author: alias, kind: kind))
+            }
+            annotations[i].reactions = existing.isEmpty ? nil : existing
+        }
+        DebugConsole.shared.log("REACT: \(kind) on \(annotationID.uuidString.prefix(8))\(messageID != nil ? "/msg" : "") by \(alias)")
         saveSidecar()
     }
 

@@ -491,6 +491,106 @@ private func threadAuthorLabel(_ author: String, store: DocumentStore) -> String
     return name.count > 8 ? String(name.prefix(8)) + "…" : name
 }
 
+/// Known reaction kinds for the rc1 vocabulary. The codec is open-ended
+/// (kind is a String), so future kinds decode cleanly on older builds;
+/// unknown kinds render with a generic glyph.
+private let reactionVocab: [(kind: String, glyph: String, label: String)] = [
+    (kind: "+1", glyph: "👍", label: "Thumbs up"),
+    (kind: "heart", glyph: "❤️", label: "Heart"),
+    (kind: "laugh", glyph: "😄", label: "Laugh"),
+]
+
+private func reactionGlyph(_ kind: String) -> String {
+    reactionVocab.first(where: { $0.kind == kind })?.glyph ?? "•"
+}
+
+/// Compact horizontal row of reaction chips. Groups reactions by kind,
+/// shows `glyph count`, hover-tooltip lists the reactors' aliases.
+/// Tapping a chip toggles your own reaction for that kind.
+struct ReactionsChips: View {
+    let reactions: [AnnotationReaction]
+    let onToggle: ((String) -> Void)?    // nil = read-only (identity not configured)
+    @EnvironmentObject var store: DocumentStore
+
+    var body: some View {
+        let c = store.theme.colors
+        // Stable order: vocab order first, then any unknown kinds alpha.
+        let groups: [(kind: String, reactors: [AnnotationReaction])] = {
+            let known = reactionVocab.map(\.kind)
+            let byKind = Dictionary(grouping: reactions, by: { $0.kind })
+            var ordered: [(String, [AnnotationReaction])] = []
+            for k in known where byKind[k] != nil {
+                ordered.append((k, byKind[k]!))
+            }
+            for (k, v) in byKind.sorted(by: { $0.key < $1.key }) where !known.contains(k) {
+                ordered.append((k, v))
+            }
+            return ordered
+        }()
+        let currentAlias = IdentityManager.shared.isConfigured
+            ? IdentityManager.shared.alias : nil
+
+        HStack(spacing: 4) {
+            ForEach(groups, id: \.kind) { group in
+                let didReact = currentAlias.map { a in group.reactors.contains { $0.author == a } } ?? false
+                let aliasList = group.reactors.map(\.author).joined(separator: ", ")
+                Button {
+                    onToggle?(group.kind)
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(reactionGlyph(group.kind))
+                            .font(.system(size: 11))
+                        Text("\(group.reactors.count)")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(c.muted)
+                    }
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(
+                        Capsule().fill(didReact ? c.accent.opacity(0.18) : c.muted.opacity(0.10))
+                    )
+                    .overlay(
+                        Capsule().stroke(didReact ? c.accent.opacity(0.5) : Color.clear, lineWidth: 0.5)
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(onToggle == nil)
+                .help(aliasList)
+            }
+        }
+    }
+}
+
+/// Small picker affordance that opens a menu with the rc1 reaction
+/// vocabulary. Only rendered when identity is configured — pre-identity
+/// users see existing reactions but can't add their own (same gating as
+/// the Resolve / Assign row).
+struct ReactionPicker: View {
+    let onPick: (String) -> Void
+    @EnvironmentObject var store: DocumentStore
+
+    var body: some View {
+        let c = store.theme.colors
+        Menu {
+            ForEach(reactionVocab, id: \.kind) { entry in
+                Button {
+                    onPick(entry.kind)
+                } label: {
+                    Text("\(entry.glyph)  \(entry.label)")
+                }
+            }
+        } label: {
+            Image(systemName: "face.smiling")
+                .font(.system(size: 11))
+                .foregroundStyle(c.muted)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Add a reaction")
+    }
+}
+
 struct AnnotationCard: View {
     let annotation: Annotation
     @EnvironmentObject var store: DocumentStore
@@ -688,10 +788,34 @@ struct AnnotationCard: View {
                 .buttonStyle(.plain)
             }
 
+            // Reactions row — visible whenever there are reactions or the
+            // current user can add one. Hidden on solo (no-identity) docs
+            // with no reactions yet, same as the Resolve/Assign row.
+            let canReact = IdentityManager.shared.isConfigured
+            let existingReactions = annotation.reactions ?? []
+            if !existingReactions.isEmpty || canReact {
+                HStack(spacing: 6) {
+                    if !existingReactions.isEmpty {
+                        ReactionsChips(
+                            reactions: existingReactions,
+                            onToggle: canReact ? { kind in
+                                store.toggleReaction(annotationID: annotation.id, kind: kind)
+                            } : nil
+                        )
+                    }
+                    if canReact {
+                        ReactionPicker { kind in
+                            store.toggleReaction(annotationID: annotation.id, kind: kind)
+                        }
+                    }
+                    Spacer()
+                }
+            }
+
             if let thread = annotation.thread, !thread.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(thread) { message in
-                        AnnotationMessageRow(message: message)
+                        AnnotationMessageRow(annotationID: annotation.id, message: message)
                     }
                 }
                 .padding(.top, 2)
@@ -870,6 +994,7 @@ struct AnnotationReplyBox: View {
 /// accent for user. Picked for density: a working thread can have many
 /// short exchanges and bubbles would push relevant content off-screen.
 struct AnnotationMessageRow: View {
+    let annotationID: UUID
     let message: AnnotationMessage
     @EnvironmentObject var store: DocumentStore
 
@@ -878,6 +1003,8 @@ struct AnnotationMessageRow: View {
         let isAgent = message.author == "agent"
         let stripeColor = authorColor(message.author, store: store, fallback: c.accent)
         let authorLabel = threadAuthorLabel(message.author, store: store)
+        let canReact = IdentityManager.shared.isConfigured
+        let reactions = message.reactions ?? []
         HStack(alignment: .top, spacing: 8) {
             Rectangle()
                 .fill(stripeColor.opacity(isAgent ? 0.55 : 0.9))
@@ -896,6 +1023,19 @@ struct AnnotationMessageRow: View {
                     Text(Self.timeFormatter.string(from: message.createdAt))
                         .font(.system(size: 10))
                         .foregroundStyle(c.muted)
+                    if !reactions.isEmpty {
+                        ReactionsChips(
+                            reactions: reactions,
+                            onToggle: canReact ? { kind in
+                                store.toggleReaction(annotationID: annotationID, messageID: message.id, kind: kind)
+                            } : nil
+                        )
+                    }
+                    if canReact {
+                        ReactionPicker { kind in
+                            store.toggleReaction(annotationID: annotationID, messageID: message.id, kind: kind)
+                        }
+                    }
                 }
             }
         }
