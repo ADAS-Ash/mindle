@@ -197,10 +197,7 @@ The big-picture plan lives in [`docs/v2-roadmap.md`](docs/v2-roadmap.md). Where 
 
 - ✅ **v2.0 — MCP collaboration loop.** Mindle is the review surface for agent-driven markdown work. The agent writes, you mark up; the agent reads your annotations and threads back, replies inline, or addresses them by editing the file. See [Agent Collaboration](#agent-collaboration).
 - ✅ **v2.1 — Multi-user collaboration.** Identity, author-stamped annotations, status / assignment / labels, threaded replies with per-author colors, and a sidecar watcher so a teammate's edits land in the open document live. A colleague editing your file in iCloud / OneDrive / Dropbox / git is architecturally indistinguishable from an agent — Mindle just makes you see them. No new sync code; the shared folder is the transport.
-
-**Next**
-
-- **v2.2 — Collaboration polish.** Incremental refinements on the v2.1 surface as real-use feedback comes in. First addition: 👍 / ❤️ / 😄 reactions on annotations and thread replies, so a quick "got it" / "agreed" doesn't need its own reply.
+- ✅ **v2.2 — Collaboration polish + typography.** 👍 / ❤️ / 😄 reactions on annotations and thread replies (with an agent-side `react_to_annotation` MCP tool), **Open from Clipboard** for Markdown sources behind a login your browser already handles, three-stop **Reading Width** control, bundled **OpenDyslexic** font, **Bionic Text** rendering, and selectable text inside annotation cards.
 
 **v3 — Two paths**
 
@@ -216,6 +213,8 @@ The big-picture plan lives in [`docs/v2-roadmap.md`](docs/v2-roadmap.md). Where 
 ## Contributors
 
 A huge thank-you to [**@ADAS-Ash**](https://github.com/ADAS-Ash) for landing the foundation of v2.1's team-collaboration feature ([PR #17](https://github.com/nonatofabio/mindle/pull/17)) — the annotation data model extensions (status, assignee, labels), `IdentityManager`, the collaborator registry, identity-colored highlights, the debug console, the `⌘⇧K` shortcut, and the `resolve` / `assign` / `get_collaborators` MCP tools. The polish on top (per-tab registries, sidecar watcher, sidebar author cues) all built directly on that work.
+
+And to [**@ad-cqc**](https://github.com/ad-cqc) for shaping v2.2's polish round — filing the **Reading Width** request ([#27](https://github.com/nonatofabio/mindle/issues/27)) that drove the three-stop column control, and contributing [PR #30](https://github.com/nonatofabio/mindle/pull/30) for selectable text inside annotation cards. The PR correctly diagnosed that SwiftUI's `Text(...).textSelection(.enabled)` doesn't survive the sidebar's per-mutation re-render, and added a clean `SelectableText` `NSViewRepresentable` with wrap-aware `intrinsicContentSize` — the right pattern for any future read-only text we want selectable in the sidebar.
 
 ## License
 
