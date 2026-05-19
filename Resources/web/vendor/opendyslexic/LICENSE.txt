@@ -1,0 +1,8 @@
+OpenDyslexic font (https://opendyslexic.org/)
+Created by Abelardo Gonzalez. Licensed under the SIL Open Font License v1.1.
+
+Source: https://github.com/antijingoist/opendyslexic
+Release: v0.91.12
+
+Bundled in Mindle under SIL OFL — see https://scripts.sil.org/OFL for the
+full license text. Mindle redistributes the woff2 builds unmodified.

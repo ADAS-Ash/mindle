@@ -179,6 +179,34 @@ struct MindleMCP {
                 ]
             ],
             [
+                "name": "react_to_annotation",
+                "description": "Add a lightweight emoji reaction to an annotation or to a specific thread message — '+1' / 'heart' / 'laugh'. Use this when a written reply would be overkill: acknowledging that you've seen the user's note, agreeing with a thread message, or signaling 'got it, continuing' without taking up a full reply card. Calling twice with the same kind toggles the reaction off (same-author + same-kind removes the prior reaction). Reactions render as a small chip on the annotation card or message row.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "path": [
+                            "type": "string",
+                            "description": "Absolute path to the file the annotation lives on."
+                        ],
+                        "id": [
+                            "type": "string",
+                            "description": "The annotation's UUID, as returned by get_annotations."
+                        ],
+                        "kind": [
+                            "type": "string",
+                            "enum": ["+1", "heart", "laugh"],
+                            "description": "Reaction kind. '+1' is the default acknowledgment; 'heart' signals strong agreement; 'laugh' for a moment of levity."
+                        ],
+                        "message_id": [
+                            "type": "string",
+                            "description": "Optional. The thread message's UUID (from the thread array in get_annotations). When set, the reaction attaches to that message instead of the parent annotation."
+                        ]
+                    ],
+                    "required": ["path", "id", "kind"],
+                    "additionalProperties": false
+                ]
+            ],
+            [
                 "name": "create_annotation",
                 "description": "Open a new annotation on a span of text in a file currently open in Mindle. Use this to ask the user a question about something you've written or about a passage you want their input on. The annotation appears in the user's sidebar marked as agent-authored with your note as the prompt; the user can reply in its thread.",
                 "inputSchema": [
@@ -325,6 +353,21 @@ struct MindleMCP {
                 body: ["path": path, "id": id, "text": text]
             ) { _ in
                 return textContent("Posted reply to annotation \(id) on \(path).")
+            }
+
+        case "react_to_annotation":
+            guard let path = arguments["path"] as? String,
+                  let id = arguments["id"] as? String,
+                  let kind = arguments["kind"] as? String else {
+                return errorContent("missing required arguments: path, id, kind")
+            }
+            var body: [String: Any] = ["path": path, "id": id, "kind": kind]
+            if let messageID = arguments["message_id"] as? String {
+                body["message_id"] = messageID
+            }
+            return callMindle(op: "react_to_annotation", body: body) { _ in
+                let target = (arguments["message_id"] as? String).map { "message \($0)" } ?? "annotation \(id)"
+                return textContent("Toggled \(kind) on \(target) (\(path)).")
             }
 
         case "create_annotation":

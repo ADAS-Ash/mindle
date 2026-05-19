@@ -169,6 +169,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
+    /// MCP-side: toggle a reaction (typically by the agent) on an
+    /// annotation or one of its thread messages. Returns true if a
+    /// matching annotation was found in any open window.
+    func reactToAnnotation(
+        forPath path: String,
+        annotationID: UUID,
+        messageID: UUID?,
+        kind: String,
+        author: String
+    ) -> Bool {
+        registeredStores.removeAll { $0.store == nil }
+        for ref in registeredStores {
+            if ref.store?.toggleReaction(
+                forPath: path,
+                annotationID: annotationID,
+                messageID: messageID,
+                kind: kind,
+                author: author
+            ) == true {
+                return true
+            }
+        }
+        return false
+    }
+
     func collaborators(forPath path: String) -> [String: Any]? {
         let normalized = URL(fileURLWithPath: path).canonicalPath
         for ref in registeredStores {
@@ -395,6 +420,27 @@ struct MindleCommands: Commands {
             Button("Toggle Theme") { store?.toggleTheme() }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
                 .disabled(store == nil)
+
+            Menu("Reading Width") {
+                Button("Narrow") { store?.readingWidth = .narrow }
+                    .keyboardShortcut("1", modifiers: .command)
+                Button("Medium") { store?.readingWidth = .medium }
+                    .keyboardShortcut("2", modifiers: .command)
+                Button("Wide") { store?.readingWidth = .wide }
+                    .keyboardShortcut("3", modifiers: .command)
+            }
+            .disabled(store == nil)
+
+            Menu("Reader Font") {
+                Button("Serif (Default)") { store?.readingFont = .serif }
+                Button("OpenDyslexic") { store?.readingFont = .openDyslexic }
+            }
+            .disabled(store == nil)
+
+            Button((store?.bionicText ?? false) ? "Disable Bionic Text" : "Enable Bionic Text") {
+                store?.bionicText.toggle()
+            }
+            .disabled(store == nil)
 
             Button("Debug Console") { DebugConsole.shared.toggle() }
                 .keyboardShortcut("d", modifiers: [.command, .shift])

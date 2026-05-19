@@ -202,6 +202,32 @@ final class MCPServer {
             }
             return ["ok": false, "error": "annotation not found (file may not be open or id is stale)"]
 
+        case "react_to_annotation":
+            guard let path = request["path"] as? String else {
+                return ["ok": false, "error": "missing 'path'"]
+            }
+            guard let idStr = request["id"] as? String, let id = UUID(uuidString: idStr) else {
+                return ["ok": false, "error": "missing or malformed 'id' (expected UUID string)"]
+            }
+            guard let kind = request["kind"] as? String, !kind.isEmpty else {
+                return ["ok": false, "error": "missing or empty 'kind' (one of '+1', 'heart', 'laugh')"]
+            }
+            let messageID: UUID? = (request["message_id"] as? String).flatMap { UUID(uuidString: $0) }
+            let normalized = URL(fileURLWithPath: path).canonicalPath
+            let ok = await MainActor.run {
+                AppDelegate.shared?.reactToAnnotation(
+                    forPath: normalized,
+                    annotationID: id,
+                    messageID: messageID,
+                    kind: kind,
+                    author: "agent"
+                ) ?? false
+            }
+            if ok {
+                return ["ok": true]
+            }
+            return ["ok": false, "error": "annotation not found (file may not be open or id is stale)"]
+
         case "create_annotation":
             guard let path = request["path"] as? String else {
                 return ["ok": false, "error": "missing 'path'"]

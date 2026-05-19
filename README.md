@@ -64,6 +64,9 @@ Requires **macOS 14+** and **Xcode Command Line Tools** (`xcode-select --install
 - **YAML frontmatter** — files like `SKILLS.md` show their `---`-delimited block as a syntax-highlighted code fence instead of two horizontal rules around plain text.
 - **Three themes** — Light, Sepia, Dark. Cycle with `⌘⇧T`.
 - **Typography controls** — scale the serif reading font with `⌘+` / `⌘-`.
+- **Reading width** — three-stop column control (Narrow / Medium / Wide) under **View → Reading Width** with `⌘1` / `⌘2` / `⌘3`. Narrow is the typography-recommended 680px column; Medium and Wide fill more of the horizontal space on large displays.
+- **Reader font** — swap between the default serif stack and **OpenDyslexic** (bundled, SIL OFL) under **View → Reader Font**. Code blocks stay monospace regardless.
+- **Bionic Text** — toggle under **View** that bolds the first half of each word, an aid for re-anchoring the eye when scanning long prose. Skips code, headings, and already-bold runs.
 
 ### Workflow
 - **Tabs and multi-window** — open many files in one window (`⌘O` adds a tab) or pop a new window with `⌘N`. Each tab carries its own scroll, theme, font scale, and collaborator registry. `⌘W` closes the active tab when more than one is open, otherwise the window.
@@ -126,6 +129,7 @@ See [Agent Collaboration](#agent-collaboration) below for setup.
 | `⌘⇧F` | Toggle files sidebar |
 | `⌘⇧D` | Toggle debug console (annotation lifecycle events) |
 | `⌘⇧T` | Cycle theme (light / sepia / dark) |
+| `⌘1` / `⌘2` / `⌘3` | Reading width: Narrow / Medium / Wide |
 | `⌘+` / `⌘-` | Increase / decrease font size |
 | `⌘⌥⏎` | Keep all in-flight changes |
 | `⌘⌥⌫` | Revert all in-flight changes |
@@ -158,6 +162,7 @@ Any MCP-aware client works the same way — the tool descriptions carry enough p
 | `get_annotations(path)` | read | Annotations + threads on a file |
 | `get_collaborators(path)` | read | Identity registry for a document |
 | `comment_on_annotation(path, id, text)` | write | Append an agent message to a thread |
+| `react_to_annotation(path, id, kind, message_id?)` | write | Toggle a 👍 / ❤️ / 😄 reaction on an annotation or thread message |
 | `create_annotation(path, text, prefix, suffix, note)` | write | Open an agent-authored annotation on a passage |
 | `clear_annotation(path, id, summary)` | write | Mark an annotation done with a summary |
 | `resolve_annotation(path, id, author?)` | write | Move an annotation to **resolved** |

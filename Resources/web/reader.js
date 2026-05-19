@@ -158,6 +158,7 @@
   let searchState = { query: "", current: 0, total: 0, matchSets: [] };
   let baseDir = "";   // absolute filesystem path of the current file's parent dir
   let applyGeneration = 0;   // bumped on every applyAll — guards async mermaid passes
+  let bionicEnabled = false; // bionic-text rendering toggle
 
   // -------- Mermaid setup --------
   function themeToMermaid(theme) {
@@ -548,6 +549,28 @@
     document.body.style.fontSize = (18 * scale) + "px";
   };
 
+  window.mindleSetReadingWidth = function (width) {
+    // CSS in reader.css maps the data attribute to a --reading-width
+    // value via three selectors; defaulting (unknown / no attr) falls
+    // back to the :root narrow value.
+    document.documentElement.dataset.readingWidth = width || "narrow";
+  };
+
+  window.mindleSetReadingFont = function (font) {
+    // CSS in reader.css carries the `html[data-reading-font="..."]`
+    // selector that swaps the body+heading font-family stack.
+    document.documentElement.dataset.readingFont = font || "serif";
+  };
+
+  window.mindleSetBionicText = function (enabled) {
+    const next = !!enabled;
+    if (next === bionicEnabled) return;
+    bionicEnabled = next;
+    // applyAll rebuilds doc.innerHTML from renderedHTML (clean), so
+    // turning bionic off cleans up the wrappers automatically.
+    applyAll();
+  };
+
   window.mindleSetAnnotations = function (list) {
     annotations = list || [];
     applyAll();
@@ -884,6 +907,14 @@
 
     applySearchMarks();
 
+    // Bionic transform runs last — after annotations and search marks
+    // have been applied — so it splits text nodes inside those
+    // wrappers without confusing the position-based anchor matcher.
+    // Skips code blocks, scripts, and already-bold runs.
+    if (bionicEnabled) {
+      applyBionicText();
+    }
+
     // Re-attach diff affordances every render. applyAll() rebuilds
     // doc.innerHTML from renderedHTML, which contains the inline
     // ✓ Keep / ✗ Revert buttons as static HTML but no event handlers,
@@ -893,6 +924,74 @@
     if (diffChunks.length) {
       attachDiffHandlers();
       injectDiffBanner();
+    }
+  }
+
+  // -------- Bionic Text --------
+
+  /// Walk every text node inside the article and split each word into
+  /// "bold first half" + "plain second half". Skips code, scripts,
+  /// already-bold runs, and any element marked `data-no-bionic`. The
+  /// first-half cut is ceil(len/2) capped at 4 chars — matches the
+  /// common bionic-reading heuristic without overshooting long words.
+  function applyBionicText() {
+    const skipParents = new Set([
+      // Programming-y elements: forcing bold on monospace breaks
+      // alignment and produces visual mush.
+      "CODE", "PRE", "SCRIPT", "STYLE", "KBD", "SAMP", "VAR",
+      // Already bold — re-bolding the first half is a no-op visually.
+      "STRONG", "B",
+      // Headings are short and scan-friendly already. The bionic split
+      // also fights heading weight tuning and looks busy.
+      "H1", "H2", "H3", "H4", "H5", "H6"
+    ]);
+    const walker = document.createTreeWalker(doc, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        let p = node.parentNode;
+        while (p && p !== doc.parentNode) {
+          if (p.nodeType === 1 && skipParents.has(p.nodeName)) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          p = p.parentNode;
+        }
+        return /[A-Za-zÀ-ɏ]/.test(node.nodeValue)
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_REJECT;
+      }
+    });
+    const targets = [];
+    let n;
+    while ((n = walker.nextNode())) targets.push(n);
+    for (const node of targets) {
+      transformBionicTextNode(node);
+    }
+  }
+
+  function transformBionicTextNode(textNode) {
+    const text = textNode.nodeValue;
+    const frag = document.createDocumentFragment();
+    // Alternating word / non-word runs. Latin + common Latin-1 supplement
+    // characters count as word; everything else (spaces, punctuation,
+    // CJK, emoji) flows through unmodified.
+    const re = /([A-Za-zÀ-ɏ]+)|([^A-Za-zÀ-ɏ]+)/g;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      if (m[1]) {
+        const word = m[1];
+        const cut = Math.min(Math.max(Math.ceil(word.length / 2), 1), 4);
+        const strong = document.createElement("strong");
+        strong.className = "mindle-bionic";
+        strong.textContent = word.slice(0, cut);
+        frag.appendChild(strong);
+        if (cut < word.length) {
+          frag.appendChild(document.createTextNode(word.slice(cut)));
+        }
+      } else if (m[2]) {
+        frag.appendChild(document.createTextNode(m[2]));
+      }
+    }
+    if (textNode.parentNode) {
+      textNode.parentNode.replaceChild(frag, textNode);
     }
   }
 

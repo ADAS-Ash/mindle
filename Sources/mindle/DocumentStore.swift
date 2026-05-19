@@ -19,6 +19,22 @@ enum ReaderTheme: String, CaseIterable, Codable {
     case light, sepia, dark
 }
 
+/// Three-stop content-column width. Narrow is the historical default and
+/// the typography-recommended range (~90 chars/line at 18px serif);
+/// Medium and Wide trade reading optimality for using more of the
+/// horizontal space on large displays.
+enum ReadingWidth: String, CaseIterable, Codable {
+    case narrow, medium, wide
+}
+
+/// Reader font family. `.serif` is the historical New York / Iowan Old
+/// Style stack; `.openDyslexic` swaps in the OpenDyslexic face (bundled
+/// under SIL OFL in Resources/web/vendor/opendyslexic) for body and
+/// headings — code blocks stay monospace either way.
+enum ReadingFont: String, CaseIterable, Codable {
+    case serif, openDyslexic
+}
+
 /// A reaction (👍 / ❤️ / 😄) on an annotation or a thread message. One
 /// (author, kind) pair per reactor per target — toggling re-applies or
 /// removes that pair. `kind` is intentionally a String so older builds
@@ -121,6 +137,9 @@ final class DocumentStore: ObservableObject {
 
     @Published var theme: ReaderTheme = .sepia
     @Published var fontScale: Double = 1.0
+    @Published var readingWidth: ReadingWidth = .narrow
+    @Published var readingFont: ReadingFont = .serif
+    @Published var bionicText: Bool = false
     @Published var showAnnotations: Bool = false
     @Published var showFileBrowser: Bool = false
     @Published var fileTree: FileNode? = nil
@@ -1130,6 +1149,13 @@ final class DocumentStore: ObservableObject {
         /// Collaborator registry — maps alias to display info. Optional
         /// so existing sidecars without collab decode cleanly.
         var collaborators: [String: SidecarCollaborator]?
+        /// Per-doc reading-width preference. Optional so older sidecars
+        /// decode cleanly; missing = narrow (the v2.1 default).
+        var readingWidth: ReadingWidth?
+        /// Per-doc font preference. Optional; missing = serif default.
+        var readingFont: ReadingFont?
+        /// Bionic-text toggle. Optional/false default.
+        var bionicText: Bool?
     }
 
     struct SidecarCollaborator: Codable, Equatable {
@@ -1149,6 +1175,9 @@ final class DocumentStore: ObservableObject {
             DebugConsole.shared.log("LOAD: \(annotations.count) annotations, \(collaborators.count) collaborators")
             if let t = decoded.theme { theme = t }
             if let s = decoded.fontScale { fontScale = s }
+            if let w = decoded.readingWidth { readingWidth = w }
+            if let f = decoded.readingFont { readingFont = f }
+            if let b = decoded.bionicText { bionicText = b }
             if let baseline = decoded.lastSyncedText {
                 lastSyncedText = baseline
             }
@@ -1203,7 +1232,10 @@ final class DocumentStore: ObservableObject {
             theme: theme,
             fontScale: fontScale,
             lastSyncedText: lastSynced,
-            collaborators: collabs.isEmpty ? nil : collabs
+            collaborators: collabs.isEmpty ? nil : collabs,
+            readingWidth: readingWidth == .narrow ? nil : readingWidth,
+            readingFont: readingFont == .serif ? nil : readingFont,
+            bionicText: bionicText ? true : nil
         )
         if let data = try? encoder.encode(sidecar) {
             // Stamp *before* the write so the FSEvents echo (which can
@@ -1263,30 +1295,74 @@ final class DocumentStore: ObservableObject {
     /// — falls back to "user" when identity isn't configured (matches
     /// how `author` is stamped on pre-identity annotations).
     func toggleReaction(annotationID: UUID, messageID: UUID? = nil, kind: String) {
-        guard let i = annotations.firstIndex(where: { $0.id == annotationID }) else { return }
         let alias = IdentityManager.shared.isConfigured ? IdentityManager.shared.alias : "user"
-        if let messageID {
-            guard var thread = annotations[i].thread,
-                  let j = thread.firstIndex(where: { $0.id == messageID }) else { return }
-            var existing = thread[j].reactions ?? []
-            if let k = existing.firstIndex(where: { $0.author == alias && $0.kind == kind }) {
-                existing.remove(at: k)
-            } else {
-                existing.append(AnnotationReaction(author: alias, kind: kind))
-            }
-            thread[j].reactions = existing.isEmpty ? nil : existing
-            annotations[i].thread = thread
-        } else {
-            var existing = annotations[i].reactions ?? []
-            if let k = existing.firstIndex(where: { $0.author == alias && $0.kind == kind }) {
-                existing.remove(at: k)
-            } else {
-                existing.append(AnnotationReaction(author: alias, kind: kind))
-            }
-            annotations[i].reactions = existing.isEmpty ? nil : existing
-        }
+        applyReactionToggle(in: &annotations, annotationID: annotationID, messageID: messageID, kind: kind, author: alias)
         DebugConsole.shared.log("REACT: \(kind) on \(annotationID.uuidString.prefix(8))\(messageID != nil ? "/msg" : "") by \(alias)")
         saveSidecar()
+    }
+
+    /// MCP-side: toggle a reaction on the annotation that lives on `path`.
+    /// Looks across every tab in this store (active and inactive). Returns
+    /// true if a matching annotation was found and the toggle applied.
+    @discardableResult
+    func toggleReaction(
+        forPath path: String,
+        annotationID: UUID,
+        messageID: UUID? = nil,
+        kind: String,
+        author: String = "agent"
+    ) -> Bool {
+        let canonical = URL(fileURLWithPath: path).canonicalPath
+        if let active = activeTabID,
+           let i = tabs.firstIndex(where: { $0.id == active }),
+           tabs[i].fileURL.canonicalPath == canonical {
+            guard annotations.contains(where: { $0.id == annotationID }) else { return false }
+            applyReactionToggle(in: &annotations, annotationID: annotationID, messageID: messageID, kind: kind, author: author)
+            DebugConsole.shared.log("REACT: \(kind) on \(annotationID.uuidString.prefix(8))\(messageID != nil ? "/msg" : "") by \(author)")
+            saveSidecar()
+            return true
+        }
+        if let i = tabs.firstIndex(where: { $0.fileURL.canonicalPath == canonical }) {
+            guard tabs[i].annotations.contains(where: { $0.id == annotationID }) else { return false }
+            applyReactionToggle(in: &tabs[i].annotations, annotationID: annotationID, messageID: messageID, kind: kind, author: author)
+            DebugConsole.shared.log("REACT: \(kind) on \(annotationID.uuidString.prefix(8))\(messageID != nil ? "/msg" : "") by \(author) (inactive tab)")
+            saveSidecar(forTab: tabs[i])
+            return true
+        }
+        return false
+    }
+
+    /// Shared in-place mutation. Same (author, kind) pair removes; otherwise
+    /// appends. Compacts an emptied reactions array back to nil so the
+    /// sidecar stays minimal.
+    private func applyReactionToggle(
+        in anns: inout [Annotation],
+        annotationID: UUID,
+        messageID: UUID?,
+        kind: String,
+        author: String
+    ) {
+        guard let i = anns.firstIndex(where: { $0.id == annotationID }) else { return }
+        if let messageID {
+            guard var thread = anns[i].thread,
+                  let j = thread.firstIndex(where: { $0.id == messageID }) else { return }
+            var existing = thread[j].reactions ?? []
+            if let k = existing.firstIndex(where: { $0.author == author && $0.kind == kind }) {
+                existing.remove(at: k)
+            } else {
+                existing.append(AnnotationReaction(author: author, kind: kind))
+            }
+            thread[j].reactions = existing.isEmpty ? nil : existing
+            anns[i].thread = thread
+        } else {
+            var existing = anns[i].reactions ?? []
+            if let k = existing.firstIndex(where: { $0.author == author && $0.kind == kind }) {
+                existing.remove(at: k)
+            } else {
+                existing.append(AnnotationReaction(author: author, kind: kind))
+            }
+            anns[i].reactions = existing.isEmpty ? nil : existing
+        }
     }
 
     // MARK: - Export

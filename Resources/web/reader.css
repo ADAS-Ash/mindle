@@ -1,3 +1,48 @@
+/* -- Bundled fonts -- */
+
+@font-face {
+  font-family: "OpenDyslexic";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("vendor/opendyslexic/OpenDyslexic-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "OpenDyslexic";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("vendor/opendyslexic/OpenDyslexic-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "OpenDyslexic";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("vendor/opendyslexic/OpenDyslexic-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "OpenDyslexic";
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url("vendor/opendyslexic/OpenDyslexic-Bold-Italic.woff2") format("woff2");
+}
+
+/* When the reading font is OpenDyslexic, swap the family on body and
+ * headings only. Code blocks intentionally stay monospace — OpenDyslexic
+ * isn't a fixed-width face, and code mis-aligns badly when forced into
+ * it. */
+html[data-reading-font="opendyslexic"] body,
+html[data-reading-font="opendyslexic"] h1,
+html[data-reading-font="opendyslexic"] h2,
+html[data-reading-font="opendyslexic"] h3,
+html[data-reading-font="opendyslexic"] h4,
+html[data-reading-font="opendyslexic"] h5,
+html[data-reading-font="opendyslexic"] h6 {
+  font-family: "OpenDyslexic", ui-serif, "New York", Georgia, serif;
+}
+
 /* -- Theme tokens -- */
 
 :root {
@@ -18,6 +63,16 @@
   --selection: rgba(140, 85, 32, 0.28);
   --table-border: #c9b88c;
   --table-alt: rgba(0, 0, 0, 0.03);
+}
+
+html[data-reading-width="medium"] { --reading-width: 920px; }
+html[data-reading-width="wide"]   { --reading-width: 1240px; }
+
+/* Bionic Text — first half of each word, bolded. The wrapping
+ * <strong class="mindle-bionic"> elements are inserted by the
+ * applyBionicText pass in reader.js when enabled. */
+strong.mindle-bionic {
+  font-weight: 700;
 }
 
 html[data-theme="light"] {

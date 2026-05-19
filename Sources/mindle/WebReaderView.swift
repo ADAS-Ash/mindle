@@ -71,6 +71,21 @@ struct WebReaderView: NSViewRepresentable {
             web.evaluateJavaScript("window.mindleSetFontScale(\(store.fontScale));")
         }
 
+        if store.readingWidth.rawValue != coord.lastReadingWidth {
+            coord.lastReadingWidth = store.readingWidth.rawValue
+            web.evaluateJavaScript("window.mindleSetReadingWidth(\(jsString(store.readingWidth.rawValue)));")
+        }
+
+        if store.readingFont.rawValue != coord.lastReadingFont {
+            coord.lastReadingFont = store.readingFont.rawValue
+            web.evaluateJavaScript("window.mindleSetReadingFont(\(jsString(store.readingFont.rawValue)));")
+        }
+
+        if store.bionicText != coord.lastBionicText {
+            coord.lastBionicText = store.bionicText
+            web.evaluateJavaScript("window.mindleSetBionicText(\(store.bionicText ? "true" : "false"));")
+        }
+
         if store.annotations != coord.lastAnnotations {
             coord.lastAnnotations = store.annotations
             let payload = store.annotations.map { a -> [String: Any] in
@@ -144,6 +159,9 @@ struct WebReaderView: NSViewRepresentable {
         var lastFileURL: URL?
         var lastTheme: String = ""
         var lastFontScale: Double = 0
+        var lastReadingWidth: String = ""
+        var lastReadingFont: String = ""
+        var lastBionicText: Bool? = nil
         var lastAnnotations: [Annotation] = []
         var lastFocusID: UUID?
         var lastSearchQuery: String = ""
@@ -263,6 +281,9 @@ struct WebReaderView: NSViewRepresentable {
             lastFileURL = nil
             lastTheme = ""
             lastFontScale = 0
+            lastReadingWidth = ""
+            lastReadingFont = ""
+            lastBionicText = nil
             lastAnnotations = []
             lastFocusID = nil
             // Trigger SwiftUI to call updateNSView
