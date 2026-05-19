@@ -31,8 +31,15 @@ enum ReadingWidth: String, CaseIterable, Codable {
 /// Style stack; `.openDyslexic` swaps in the OpenDyslexic face (bundled
 /// under SIL OFL in Resources/web/vendor/opendyslexic) for body and
 /// headings — code blocks stay monospace either way.
+///
+/// Raw values are explicit lowercase: the rawValue is what we hand to JS,
+/// which writes it into the `data-reading-font` attribute. CSS attribute
+/// matching is case-sensitive by default, so an enum-default camelCase
+/// rawValue ("openDyslexic") silently misses the `[data-reading-font=
+/// "opendyslexic"]` selector and the font never swaps.
 enum ReadingFont: String, CaseIterable, Codable {
-    case serif, openDyslexic
+    case serif = "serif"
+    case openDyslexic = "opendyslexic"
 }
 
 /// A reaction (👍 / ❤️ / 😄) on an annotation or a thread message. One
