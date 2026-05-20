@@ -422,18 +422,18 @@ struct MindleCommands: Commands {
                 .disabled(store == nil)
 
             Menu("Reading Width") {
-                Button("Narrow") { store?.readingWidth = .narrow }
+                Button("Narrow") { store?.setReadingWidth(.narrow) }
                     .keyboardShortcut("1", modifiers: .command)
-                Button("Medium") { store?.readingWidth = .medium }
+                Button("Medium") { store?.setReadingWidth(.medium) }
                     .keyboardShortcut("2", modifiers: .command)
-                Button("Wide") { store?.readingWidth = .wide }
+                Button("Wide") { store?.setReadingWidth(.wide) }
                     .keyboardShortcut("3", modifiers: .command)
             }
             .disabled(store == nil)
 
             Menu("Reader Font") {
-                Button("Serif (Default)") { store?.readingFont = .serif }
-                Button("OpenDyslexic") { store?.readingFont = .openDyslexic }
+                Button("Serif (Default)") { store?.setReadingFont(.serif) }
+                Button("OpenDyslexic") { store?.setReadingFont(.openDyslexic) }
             }
             .disabled(store == nil)
 

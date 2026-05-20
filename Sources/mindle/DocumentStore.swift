@@ -144,9 +144,54 @@ final class DocumentStore: ObservableObject {
 
     @Published var theme: ReaderTheme = .sepia
     @Published var fontScale: Double = 1.0
-    @Published var readingWidth: ReadingWidth = .narrow
-    @Published var readingFont: ReadingFont = .serif
+    @Published var readingWidth: ReadingWidth = DocumentStore.persistedReadingWidth()
+    @Published var readingFont: ReadingFont = DocumentStore.persistedReadingFont()
     @Published var bionicText: Bool = false
+
+    /// UserDefaults keys for the user-level (cross-document) default of
+    /// each reader preference. Sidecar still wins per-doc if it carries
+    /// an explicit value (back-compat with v2.2.0 sidecars); these are
+    /// the fallback for any new doc opened without an override.
+    private static let defaultsKeyReadingWidth = "mindle.readingWidth"
+    private static let defaultsKeyReadingFont = "mindle.readingFont"
+
+    private static func persistedReadingWidth() -> ReadingWidth {
+        if let raw = UserDefaults.standard.string(forKey: defaultsKeyReadingWidth),
+           let w = ReadingWidth(rawValue: raw) { return w }
+        return .narrow
+    }
+
+    private static func persistedReadingFont() -> ReadingFont {
+        if let raw = UserDefaults.standard.string(forKey: defaultsKeyReadingFont),
+           let f = ReadingFont(rawValue: raw) { return f }
+        return .serif
+    }
+
+    /// Menu-action setter. Updates the visible state *and* persists the
+    /// choice as the new user-level default, so the next file opened
+    /// (without an explicit sidecar override) starts at this value.
+    /// Avoid mutating `readingWidth` directly from menus — that path
+    /// skips the UserDefaults write and the persistence falls apart.
+    func setReadingWidth(_ width: ReadingWidth) {
+        readingWidth = width
+        UserDefaults.standard.set(width.rawValue, forKey: Self.defaultsKeyReadingWidth)
+    }
+
+    func setReadingFont(_ font: ReadingFont) {
+        readingFont = font
+        UserDefaults.standard.set(font.rawValue, forKey: Self.defaultsKeyReadingFont)
+    }
+
+    /// Reset width/font to the user-level UserDefaults default. Call this
+    /// before `loadSidecar()` on every "open a new file" path so the
+    /// previous document's per-doc sidecar override doesn't leak into a
+    /// fresh tab that has no override of its own. Sidecar-watcher reloads
+    /// must NOT call this — the user may have manually picked a width on
+    /// the open doc that we'd then erase on every external sidecar bump.
+    private func resetReaderPrefsToUserDefaults() {
+        readingWidth = Self.persistedReadingWidth()
+        readingFont = Self.persistedReadingFont()
+    }
     @Published var showAnnotations: Bool = false
     @Published var showFileBrowser: Bool = false
     @Published var fileTree: FileNode? = nil
@@ -345,6 +390,7 @@ final class DocumentStore: ObservableObject {
             self.lastSyncedText = text
             self.annotations = []
             self.collaborators = [:]
+            self.resetReaderPrefsToUserDefaults()
             self.loadSidecar()
 
             // Capture the sidecar-loaded annotations into the tab snapshot.
@@ -555,6 +601,7 @@ final class DocumentStore: ObservableObject {
         // No body watcher (no file to watch); sidecar watcher is wired up
         // inside updateWatcher when the sidecar URL resolves to a file.
         updateWatcher()
+        resetReaderPrefsToUserDefaults()
         loadSidecar()
         snapshotActiveTab()
     }
@@ -585,6 +632,7 @@ final class DocumentStore: ObservableObject {
         if activeTabID == tabID {
             rawText = body
             lastSyncedText = body
+            resetReaderPrefsToUserDefaults()
             loadSidecar()
             snapshotActiveTab()
         }
