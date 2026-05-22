@@ -150,6 +150,22 @@ struct SelectableText: NSViewRepresentable {
         }
         host.configure(text: text, font: font, textColor: textColor)
     }
+
+    /// macOS 13+ sizing hook. SwiftUI calls this to ask "for this proposed
+    /// width, how much height do you need?" before the first layout pass.
+    /// Without this override SwiftUI relies on intrinsicContentSize, which
+    /// is queried *before* `layout()` runs — so on first render the host
+    /// reports a one-line height (bounds.width is still 0), SwiftUI lays
+    /// the siblings beneath that height, and the actual multi-line text
+    /// then renders into the same Y range as the next sibling. The
+    /// symptom is annotation-card buttons rendering *behind* a wrapped
+    /// body. Computing the wrap-aware height here closes the gap.
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: SelectableTextHostView, context: Context) -> CGSize? {
+        let width = proposal.width ?? nsView.bounds.width
+        guard width > 0 else { return nil }
+        let height = nsView.measureHeight(forWidth: width)
+        return CGSize(width: width, height: height)
+    }
 }
 
 /// AppKit container that owns a non-editable, selectable `NSTextView` and
@@ -216,15 +232,22 @@ final class SelectableTextHostView: NSView {
     }
 
     override var intrinsicContentSize: NSSize {
+        let height = measureHeight(forWidth: bounds.width)
+        return NSSize(width: NSView.noIntrinsicMetric, height: height)
+    }
+
+    /// Lay the text out at `width` and report the wrap-aware height,
+    /// clamped to `maxLines` when set. Shared between
+    /// `intrinsicContentSize` (the older path, called when bounds.width
+    /// is meaningful) and `SelectableText.sizeThatFits` (the macOS 13+
+    /// path, called with SwiftUI's proposed width before layout runs).
+    func measureHeight(forWidth width: CGFloat) -> CGFloat {
         guard let lm = textView.layoutManager,
               let tc = textView.textContainer else {
-            return super.intrinsicContentSize
+            return 0
         }
-        // Force a layout pass at the current width before we read the
-        // used rect — without this, the height comes back as zero on the
-        // first pass and SwiftUI lays the host at 0pt high.
         tc.size = NSSize(
-            width: max(bounds.width, 1),
+            width: max(width, 1),
             height: .greatestFiniteMagnitude
         )
         lm.ensureLayout(for: tc)
@@ -233,7 +256,7 @@ final class SelectableTextHostView: NSView {
             let lineHeight = lm.defaultLineHeight(for: textView.font ?? .systemFont(ofSize: 12))
             height = min(height, CGFloat(maxLines) * lineHeight)
         }
-        return NSSize(width: NSView.noIntrinsicMetric, height: ceil(height))
+        return ceil(height)
     }
 }
 
