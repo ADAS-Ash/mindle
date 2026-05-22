@@ -201,10 +201,22 @@ final class SelectableTextHostView: NSView {
         textView.textContainerInset = .zero
         textView.textContainer?.lineFragmentPadding = 0
         textView.textContainer?.widthTracksTextView = true
+        // Both resize axes must be off. With isVerticallyResizable=true,
+        // an NSTextView that finds itself with insufficient frame height
+        // inside drawRect calls _resizeTextViewForTextContainer → setFrameSize.
+        // setFrameSize fires constraint updates which SwiftUI's host turns
+        // into a LayoutInvalidator.invalidate() — and AppKit panics on
+        // "constraint change during draw," crashing the app with
+        // EXC_BREAKPOINT. PDF annotation bodies (multi-line selections
+        // captured from PDFSelection) routinely overflow the first-pass
+        // frame and lit this up; the same code path existed on v2.2.0
+        // for any wrapped markdown highlight just rarely enough to miss.
+        // The host (SelectableTextHostView) is the only authority on
+        // height — sizeThatFits and intrinsicContentSize report the
+        // wrap-aware value; the text view just fills the frame we give it.
         textView.isHorizontallyResizable = false
-        textView.isVerticallyResizable = true
-        textView.autoresizingMask = [.width]
-        textView.translatesAutoresizingMaskIntoConstraints = true
+        textView.isVerticallyResizable = false
+        textView.autoresizingMask = []
         addSubview(textView)
     }
 
