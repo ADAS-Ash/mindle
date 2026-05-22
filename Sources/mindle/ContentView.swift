@@ -591,12 +591,20 @@ struct ReactionPicker: View {
                 }
             }
         } label: {
-            Image(systemName: "face.smiling")
+            // Match the trash button's perceived weight: same `c.muted`
+            // color, same 11pt size, but use the .fill variant so the
+            // glyph reads as a solid silhouette rather than thin outline
+            // strokes that wash out against sepia/light surfaces. .tint
+            // on the Menu forces the muted color through SwiftUI's
+            // borderless-button label tinting, which otherwise drops a
+            // secondary opacity on top of any in-label foregroundStyle.
+            Image(systemName: "face.smiling.fill")
                 .font(.system(size: 11))
                 .foregroundStyle(c.muted)
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
+        .tint(c.muted)
         .fixedSize()
         .help("Add a reaction")
     }
@@ -729,12 +737,30 @@ struct AnnotationCard: View {
                             Button(label) { store.addLabel(to: annotation.id, label: label) }
                         }
                     } label: {
-                        Image(systemName: "tag")
-                            .font(.system(size: 10))
+                        // Same recipe as the reaction picker beside it:
+                        // .fill variant for solid silhouette mass, 11pt
+                        // to match the trash button up top, .tint on the
+                        // Menu so borderlessButton's secondary opacity
+                        // doesn't dim the foreground style.
+                        Image(systemName: "tag.fill")
+                            .font(.system(size: 11))
                             .foregroundStyle(c.muted)
                     }
                     .menuStyle(.borderlessButton)
+                    .tint(c.muted)
                     .fixedSize()
+
+                    // React inline with Assign / Tag — keeps "things you
+                    // can attach to this annotation" as one visual group
+                    // and gives the picker enough context that the small
+                    // smiley reads as a clickable affordance instead of
+                    // a stray dot. Gated on identity, same as the rest
+                    // of the action row.
+                    if IdentityManager.shared.isConfigured {
+                        ReactionPicker { kind in
+                            store.toggleReaction(annotationID: annotation.id, kind: kind)
+                        }
+                    }
                 }
                 .padding(.top, 2)
 
@@ -801,26 +827,21 @@ struct AnnotationCard: View {
                 .buttonStyle(.plain)
             }
 
-            // Reactions row — visible whenever there are reactions or the
-            // current user can add one. Hidden on solo (no-identity) docs
-            // with no reactions yet, same as the Resolve/Assign row.
-            let canReact = IdentityManager.shared.isConfigured
+            // Reactions chips row — only renders when there's at least
+            // one reaction to display. The picker that *adds* reactions
+            // lives in the action row above, so the chips row stays
+            // empty (and hidden) for new annotations rather than
+            // dangling a lone affordance.
             let existingReactions = annotation.reactions ?? []
-            if !existingReactions.isEmpty || canReact {
+            let canReact = IdentityManager.shared.isConfigured
+            if !existingReactions.isEmpty {
                 HStack(spacing: 6) {
-                    if !existingReactions.isEmpty {
-                        ReactionsChips(
-                            reactions: existingReactions,
-                            onToggle: canReact ? { kind in
-                                store.toggleReaction(annotationID: annotation.id, kind: kind)
-                            } : nil
-                        )
-                    }
-                    if canReact {
-                        ReactionPicker { kind in
+                    ReactionsChips(
+                        reactions: existingReactions,
+                        onToggle: canReact ? { kind in
                             store.toggleReaction(annotationID: annotation.id, kind: kind)
-                        }
-                    }
+                        } : nil
+                    )
                     Spacer()
                 }
             }
