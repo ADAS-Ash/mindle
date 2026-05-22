@@ -214,5 +214,14 @@
       <description><![CDATA[<p>Release 2.2.3. <a href="https://github.com/nonatofabio/mindle/releases/tag/v2.2.3">Full release notes on GitHub</a>.</p><hr><p style="text-align: center; font-size: 0.85em; color: #7d6b52; margin-top: 1.5em;"><a href="https://buymeacoffee.com/nonatofabio" style="color: #8c5520; text-decoration: none;">☕ Buy me a coffee</a></p>]]></description>
       <enclosure url="https://github.com/nonatofabio/mindle/releases/download/v2.2.3/Mindle.dmg" sparkle:edSignature="AMSSt2O3Rdw3Cu2HINR+dQVyHh5Ri5OUxDptNIfP5iK/LEe+QR3hNotwKHvZNsK9H5t3Nh0cvNNNH8Iv9p4dAg==" length="4589568" type="application/octet-stream" />
     </item>
+      <item>
+      <title>Version 2.2.4</title>
+      <pubDate>Fri, 22 May 2026 21:02:10 +0000</pubDate>
+      <sparkle:shortVersionString>2.2.4</sparkle:shortVersionString>
+      <sparkle:version>122</sparkle:version>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<p>Release 2.2.4. <a href="https://github.com/nonatofabio/mindle/releases/tag/v2.2.4">Full release notes on GitHub</a>.</p><hr><p style="text-align: center; font-size: 0.85em; color: #7d6b52; margin-top: 1.5em;"><a href="https://buymeacoffee.com/nonatofabio" style="color: #8c5520; text-decoration: none;">☕ Buy me a coffee</a></p>]]></description>
+      <enclosure url="https://github.com/nonatofabio/mindle/releases/download/v2.2.4/Mindle.dmg" sparkle:edSignature="ErGmMHCIrT0zNDw6mjdaPxrjFx0BdFwOZ6LCdaUa6XY0rejaosh219OSLbvvv0H5taooOi+Ok/3XwAj4BxEUCQ==" length="4596503" type="application/octet-stream" />
+    </item>
   </channel>
 </rss>
