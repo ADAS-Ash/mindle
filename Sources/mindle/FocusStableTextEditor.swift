@@ -207,16 +207,20 @@ final class SelectableTextHostView: NSView {
         // setFrameSize fires constraint updates which SwiftUI's host turns
         // into a LayoutInvalidator.invalidate() — and AppKit panics on
         // "constraint change during draw," crashing the app with
-        // EXC_BREAKPOINT. PDF annotation bodies (multi-line selections
-        // captured from PDFSelection) routinely overflow the first-pass
-        // frame and lit this up; the same code path existed on v2.2.0
-        // for any wrapped markdown highlight just rarely enough to miss.
-        // The host (SelectableTextHostView) is the only authority on
-        // height — sizeThatFits and intrinsicContentSize report the
-        // wrap-aware value; the text view just fills the frame we give it.
+        // EXC_BREAKPOINT. The host (SelectableTextHostView) is the only
+        // authority on height — sizeThatFits and intrinsicContentSize
+        // report the wrap-aware value; the text view just fills the frame
+        // we give it.
         textView.isHorizontallyResizable = false
         textView.isVerticallyResizable = false
         textView.autoresizingMask = []
+        // Safety net: the maxLines clamp computes the bottom of the Nth
+        // line precisely (see measureHeight), but if the layout manager
+        // and the host ever disagree by a pixel — or if NSTextView paints
+        // a fragment outside the dirty rect we asked for — clipping the
+        // host's bounds keeps overflow from bleeding into the action row
+        // beneath the annotation card body.
+        self.clipsToBounds = true
         addSubview(textView)
     }
 
@@ -253,6 +257,13 @@ final class SelectableTextHostView: NSView {
     /// `intrinsicContentSize` (the older path, called when bounds.width
     /// is meaningful) and `SelectableText.sizeThatFits` (the macOS 13+
     /// path, called with SwiftUI's proposed width before layout runs).
+    ///
+    /// Clamping walks actual line fragments from the layout manager
+    /// rather than multiplying `defaultLineHeight` by the line count —
+    /// the typographic line height ignores inter-line spacing that
+    /// NSTextView applies during real layout, so the multiplier always
+    /// undercounted on wrapped bodies and the action row beneath the
+    /// host ended up painted-over.
     func measureHeight(forWidth width: CGFloat) -> CGFloat {
         guard let lm = textView.layoutManager,
               let tc = textView.textContainer else {
@@ -263,12 +274,24 @@ final class SelectableTextHostView: NSView {
             height: .greatestFiniteMagnitude
         )
         lm.ensureLayout(for: tc)
-        var height = lm.usedRect(for: tc).height
-        if maxLines > 0 {
-            let lineHeight = lm.defaultLineHeight(for: textView.font ?? .systemFont(ofSize: 12))
-            height = min(height, CGFloat(maxLines) * lineHeight)
+        let full = lm.usedRect(for: tc).height
+        if maxLines <= 0 {
+            return ceil(full)
         }
-        return ceil(height)
+        // Walk line fragments until we've passed maxLines; the bottom of
+        // the Nth fragment is the precise clamp height. If the text has
+        // fewer than maxLines lines, we keep the full height.
+        var lineCount = 0
+        var clampedHeight: CGFloat = full
+        let glyphRange = NSRange(location: 0, length: lm.numberOfGlyphs)
+        lm.enumerateLineFragments(forGlyphRange: glyphRange) { _, used, _, _, stop in
+            lineCount += 1
+            if lineCount >= self.maxLines {
+                clampedHeight = used.maxY
+                stop.pointee = true
+            }
+        }
+        return ceil(min(full, clampedHeight))
     }
 }
 
