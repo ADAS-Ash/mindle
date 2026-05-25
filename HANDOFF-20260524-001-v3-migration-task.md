@@ -109,6 +109,22 @@ struct AnnotationMessage: Identifiable, Codable, Equatable {
 }
 ```
 
+### Step 2b: Add Reactions support
+
+Add a `Reaction` struct and optional `reactions` field to both `Annotation` and `AnnotationMessage`:
+
+```swift
+struct Reaction: Codable, Equatable {
+    var emoji: String       // "👍", "🎯", "+1", "❤️"
+    var authors: [String]   // collaborator aliases
+}
+```
+
+- Add `var reactions: [Reaction]?` to both `Annotation` and `AnnotationMessage`
+- When encoding: omit if nil/empty (keep JSON minimal)
+- When decoding: treat missing field as nil (backward compat with existing sidecars)
+- Note: Mindle already has a reaction picker UI (from the v2.2.4 upstream merge) — wire it to this data model
+
 ### Step 3: Update `Sidecar` serialization (DocumentStore.swift:953+)
 
 The `Sidecar` struct and `loadSidecar()`/`writeSidecar()` need:
